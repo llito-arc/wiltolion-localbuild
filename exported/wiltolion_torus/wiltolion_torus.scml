@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spriter_data scml_version="1.0" generator="BrashMonkey Spriter" generator_version="b5">
+    <folder id="0" name="swap_hat">
+        <file id="0" name="swap_hat/swap_hat-0.png" width="226" height="228" pivot_x="0.51958" pivot_y="-0.2"/>
+        <file id="1" name="swap_hat/swap_hat-1.png" width="210" height="233" pivot_x="0.51958" pivot_y="-0.2"/>
+        <file id="2" name="swap_hat/swap_hat-2.png" width="213" height="233" pivot_x="0.52" pivot_y="-0.2"/>
+        <file id="3" name="swap_hat/swap_hat-3.png" width="271" height="260" pivot_x="0.51958" pivot_y="-0.2"/>
+    </folder>
+    <entity id="0" name="wiltolion_torus">
+        <animation id="0" name="idle" length="1000">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="swap_hat" folder="0" file="3" abs_x="10" abs_y="0" abs_pivot_x="0.51958" abs_pivot_y="-0.2" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="swap_hat">
+                <key id="0" spin="0">
+                    <object folder="0" file="3" x="10" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="1" name="ground" length="1000">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="swap_hat" folder="0" file="3" abs_x="0" abs_y="0" abs_pivot_x="0.5" abs_pivot_y="0.1" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="swap_hat">
+                <key id="0" spin="0">
+                    <object folder="0" file="3" y="0" pivot_x="0.5" pivot_y="0.1" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+    </entity>
+</spriter_data>

@@ -1,0 +1,41 @@
+🌟 Wiltolion Update: The Sun Cub Shines Brighter! 🌟
+🔥 Major Additions & Gameplay Changes
+
+New Companion: Wilto! You can now summon Wilto, a faithful companion who will help you out with basic tasks and fight bravely right by your side.
+
+new item: adventure journal! this item will grant you the hability to command wilto and keep him safe!
+
+New Resource: Sundrops! These little bursts of sunshine will now randomly fall from the sky during the daytime. You can eat them to recover your strength or use them as a core material to craft all sorts of fun, Wiltolion-exclusive toys!
+
+New Summons: Sun Flies! Crafted using 3 Sundrops, these radiant little helpers will assist you in combat. They are highly obedient and will wait for your orders to act—though if they see you taking damage, they won't be able to resist jumping in to defend you!
+
+Gem Mining Ability: Wiltolion's connection to the magic has grown. You now have a chance to unearth precious gems while mining regular rocks!
+
+Monster Classification: Wiltolion is now officially classified as a Monster. Be careful how the world (and certain neutral creatures) reacts to you now!
+
+New Crafting Recipes: Added a variety of new and useful items to craft.
+
+Finished Dialogues: Wiltolion has finally found his voice! All of his custom character quotes and inspection dialogues are completely finished.
+
+🛠️ Visuals, Bug Fixes & Compatibility
+
+"Mods in Menu" Compatibility: Our favorite star cub can now appear on the main menu screen! (The integration is basic for now, but it works flawlessly!).
+
+Torus Positioning Fixed: Fixed an issue where the Sun Torus was sitting at the wrong position on the character side view.
+
+Sprite Polish: Updated and improved several sprites for better visual quality.
+
+Sunflower statue thet do a lot of thingy! with gems!
+
+
+
+🚀 Roadmap: What's coming next?
+More exciting changes are planned for the future, including:
+
+A dedicated Skill Tree. (dont spect it too much!)
+
+Exclusive custom structures. (maybe!)
+
+Even more unique summons. (maybe too!)
+
+...and much more! (or not!)
