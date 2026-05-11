@@ -52,6 +52,8 @@ Assets = {
     Asset("IMAGE", "images/map_icons/wiltolion_pylon_mapicon.tex"),
     Asset("ATLAS", "images/wiltolion_background.xml"),
     Asset("IMAGE", "images/wiltolion_background.tex"),
+    Asset("ATLAS", "images/inventoryimages/wiltolion_thingy.xml"),
+    Asset("IMAGE", "images/inventoryimages/wiltolion_thingy.tex"),
 }
 
 for i = 1, 14 do
@@ -72,6 +74,7 @@ RegisterInventoryItemAtlas("images/inventoryimages/wiltolion_buddy.xml", "wiltol
 RegisterInventoryItemAtlas("images/inventoryimages/wiltolion_sundrop.xml", "wiltolion_sundrop.tex")
 RegisterInventoryItemAtlas("images/inventoryimages/wiltolion_wilto.xml", "wiltolion_wilto.tex")
 RegisterInventoryItemAtlas("images/inventoryimages/wiltolion_pylon.xml", "wiltolion_pylon.tex")
+RegisterInventoryItemAtlas("images/inventoryimages/wiltolion_thingy.xml", "wiltolion_thingy.tex")
 
 AddMinimapAtlas("images/map_icons/wiltolion.xml")
 AddMinimapAtlas("images/map_icons/wiltolion_pylon_mapicon.xml")

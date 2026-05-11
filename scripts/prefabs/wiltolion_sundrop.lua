@@ -80,7 +80,7 @@ local function fn()
     --inst.components.inventoryitem.canonlygoinpocketorpocketcontainers = true
     
     inst:AddComponent("stackable")
-    inst.components.stackable.maxsize = TUNING.STACK_SIZE_SMALLITEM
+    inst.components.stackable.maxsize = TUNING.STACK_SIZE_TINYITEM
 
     MakeHauntableLaunch(inst)
 

@@ -108,11 +108,14 @@ end
 local function OnHealTick(inst)
     local current_time = GetTime()
 
-    -- Clean the blacklist
+    -- Clean the blacklist and reset the heal amounts for expired targets
     if inst.heal_blacklist then
         for guid, expire_time in pairs(inst.heal_blacklist) do
             if current_time >= expire_time then
                 inst.heal_blacklist[guid] = nil
+                if inst.heal_amounts then
+                    inst.heal_amounts[guid] = nil
+                end
             end
         end
     end
@@ -124,9 +127,15 @@ local function OnHealTick(inst)
             if inst:IsNear(target, 4) then
                 local hp_pct = target.components.health:GetPercent()
                 
-                if hp_pct < 0.45 then
-                    target.components.health:DoDelta(5, false, inst.prefab)
+                -- Target is valid and within the healing window (under 65%)
+                if hp_pct < 0.65 then
+                    local heal_power = 5
+                    target.components.health:DoDelta(heal_power, false, inst.prefab)
                     
+                    -- Track the total amount healed for this specific target
+                    inst.heal_amounts[target.GUID] = (inst.heal_amounts[target.GUID] or 0) + heal_power
+                    
+                    -- Visual and sound effects
                     local fx = SpawnPrefab("spider_heal_target_fx")
                     if fx then 
                         fx.Transform:SetPosition(target.Transform:GetWorldPosition())
@@ -136,11 +145,13 @@ local function OnHealTick(inst)
                     inst:PushEvent("play_subtle_heal")
                     inst.SoundEmitter:PlaySound("webber1/creatures/spider_cannonfodder/heal_fartcloud")
                     
-                    if target.components.health:GetPercent() >= 0.45 then
+                    -- Check stop conditions: reached 65% HP OR reached the 150 HP healing cap
+                    if target.components.health:GetPercent() >= 0.65 or inst.heal_amounts[target.GUID] >= 150 then
                         inst.heal_blacklist[target.GUID] = current_time + 90
                         inst.target_to_heal = nil
                     end
                 else
+                    -- Fail-safe: Target is somehow above 65%, blacklist and drop
                     inst.heal_blacklist[target.GUID] = current_time + 90
                     inst.target_to_heal = nil
                 end
@@ -189,6 +200,7 @@ local function fn()
 
     -- Passive healing variables
     inst.heal_blacklist = {}
+    inst.heal_amounts = {}
     inst.target_to_heal = nil
     
     inst:DoPeriodicTask(10, OnBuffTick)

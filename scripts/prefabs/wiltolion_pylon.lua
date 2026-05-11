@@ -7,7 +7,7 @@ local prefabs = {
 }
 
 -- =========================================================
--- REGISTRO GLOBAL DE PILONES (NUEVO)
+-- GLOBAL PYLON REGISTRY
 -- =========================================================
 local function RegisterPylon(inst)
     if not TheWorld.wiltolion_pylons then
@@ -23,7 +23,7 @@ local function UnregisterPylon(inst)
 end
 
 -- =========================================================
--- CONFIGURACIÓN DE GEMAS Y PODERES
+-- GEMS AND POWER CONFIGURATION
 -- =========================================================
 local GEMS_DATA = {
     redgem          = { timer = "power_red",    duration = 1800 },
@@ -36,11 +36,38 @@ local GEMS_DATA = {
 }
 
 -- =========================================================
--- EVENTOS DE ESTRUCTURA
+-- CENTRALIZED ANIMATION CONTROL
+-- Ensures the structure always returns to the correct loop
 -- =========================================================
-local function onhit(inst, worker)
-    inst.AnimState:PlayAnimation("hit")
-    inst.AnimState:PushAnimation("idle", false)
+local function PlayCorrectIdle(inst)
+    if not inst:HasTag("burnt") then
+        -- Protect transition animations from being interrupted
+        if inst.AnimState:IsCurrentAnimation("active_ini") then
+            return
+        end
+
+        if inst.components.timer ~= nil and inst.components.timer:TimerExists("power_opal") then
+            inst.AnimState:PlayAnimation("active", true)
+        else
+            inst.AnimState:PlayAnimation("idle", true)
+        end
+    end
+end
+
+-- =========================================================
+-- STRUCTURE EVENTS
+-- =========================================================
+local function onhit(inst)
+    if not inst:HasTag("burnt") then
+        inst.AnimState:PlayAnimation("hit")
+        
+        -- Use native queueing instead of DoTaskInTime
+        if inst.components.timer ~= nil and inst.components.timer:TimerExists("power_opal") then
+            inst.AnimState:PushAnimation("active", true)
+        else
+            inst.AnimState:PushAnimation("idle", true)
+        end
+    end
 end
 
 local function onmined(inst, worker)
@@ -59,12 +86,19 @@ end
 
 local function onbuilt(inst)
     inst.AnimState:PlayAnimation("place")
-    inst.AnimState:PushAnimation("idle", false)
+    
+    -- Correctly queue the idle loop
+    if inst.components.timer ~= nil and inst.components.timer:TimerExists("power_opal") then
+        inst.AnimState:PushAnimation("active", true)
+    else
+        inst.AnimState:PushAnimation("idle", true)
+    end
+    
     inst.SoundEmitter:PlaySound("dontstarve/common/place_structure_stone")
 end
 
 -- =========================================================
--- SISTEMA NERVIOSO: AURAS, RADAR Y VISUALES
+-- NERVOUS SYSTEM: AURAS, RADAR AND VISUALS
 -- =========================================================
 local function UpdateAuras(inst)
     local timer = inst.components.timer
@@ -79,27 +113,19 @@ local function UpdateAuras(inst)
     local multiplier = has_opal and 1.5 or 1.0
 
     -- ==========================================
-    -- 1. FEEDBACK VISUAL: AURA DIVINA DE SPAWN
+    -- 1. VISUAL FEEDBACK: DIVINE SPAWN AURA
     -- ==========================================
     if has_opal then
-        -- Si el Ópalo está activo y el escudo blanco no existe, lo invocamos
         if inst._opal_shield_fx == nil then
-            -- Este es el nombre exacto en el código de Klei para la inmunidad al spawnear
             inst._opal_shield_fx = SpawnPrefab("spawnprotectionbuff")
             
             if inst._opal_shield_fx ~= nil then
-                -- Lo emparentamos al Pilón para que lo siga y se destruya con él
                 inst._opal_shield_fx.entity:SetParent(inst.entity)
-                
-                -- Ajustamos la posición vertical. Al ser para un jugador, suele spawnear en los pies.
                 inst._opal_shield_fx.Transform:SetPosition(0, 0.2, 0)
-                
-                -- Escala para que cubra bien la estructura de roca
                 inst._opal_shield_fx.Transform:SetScale(1.6, 1.6, 1.6)
             end
         end
     else
-        -- Si el Ópalo se agota, limpiamos la cúpula blanca
         if inst._opal_shield_fx ~= nil then
             if inst._opal_shield_fx:IsValid() then
                 inst._opal_shield_fx:Remove()
@@ -109,7 +135,7 @@ local function UpdateAuras(inst)
     end
 
     -- ==========================================
-    -- Mezclador dinámico de colores (Tinte visual aditivo sutil)
+    -- DYNAMIC COLOR MIXER (Additive Tint)
     -- ==========================================
     local r, g, b = 0, 0, 0
     if has_red then r = r + 0.15 end
@@ -118,11 +144,10 @@ local function UpdateAuras(inst)
     if has_purple then r = r + 0.1; b = b + 0.1 end
     if timer:TimerExists("power_green") then g = g + 0.15 end
 
-    -- Aplicamos el color al propio pilón por debajo del escudo blanco
     inst.AnimState:SetAddColour(math.min(r, 0.3), math.min(g, 0.3), math.min(b, 0.3), 0)
 
     -- ==========================================
-    -- 2. TEMPERATURA Y AHORRO DE ENERGÍA
+    -- 2. TEMPERATURE AND ENERGY SAVING
     -- ==========================================
     local is_winter = TheWorld.state.iswinter
     local is_summer = TheWorld.state.issummer
@@ -159,17 +184,17 @@ local function UpdateAuras(inst)
     end
 
     -- ==========================================
-    -- 3. LUZ FÍSICA
+    -- 3. PHYSICAL LIGHT
     -- ==========================================
     if has_yellow then
         inst.Light:Enable(true)
-        inst.Light:SetRadius(3.5 * multiplier) 
+        inst.Light:SetRadius(6 * multiplier) 
     else
         inst.Light:Enable(false)
     end
 
     -- ==========================================
-    -- 4. CORDURA
+    -- 4. SANITY AURA
     -- ==========================================
     if inst.components.sanityaura then
         if has_purple then
@@ -198,12 +223,12 @@ local function ApplyRadarPulses(inst)
 
     for i, player in ipairs(players) do
         
-        -- CURACIÓN PASIVA
+        -- PASSIVE HEALING
         if has_green and player.components.health then
             player.components.health:DoDelta(0.25 * multiplier, true, "wiltolion_pylon")
         end
 
-        -- VELOCIDAD
+        -- SPEED BOOST
         if has_orange and player.components.locomotor then
             local speed_bonus = 0.10 * multiplier
             local speed_mult = 1.0 + speed_bonus
@@ -222,7 +247,7 @@ local function ApplyRadarPulses(inst)
             end)
         end
 
-        -- DEFENSA BASE
+        -- BASE DEFENSE
         if has_opal and player.components.health then
             if player.components.health.externalabsorbmodifiers then
                 player.components.health.externalabsorbmodifiers:SetModifier(inst, 0.20, "wiltolion_pylon_defense")
@@ -243,7 +268,7 @@ local function ApplyRadarPulses(inst)
 end
 
 -- =========================================================
--- METABOLISMO: CONSUMO Y FOTOSÍNTESIS
+-- METABOLISM: CONSUMPTION AND PHOTOSYNTHESIS
 -- =========================================================
 local function GenerateSundrops(inst)
     if not inst:IsValid() then return end
@@ -251,14 +276,20 @@ local function GenerateSundrops(inst)
     if not TheWorld.state.isday then return end
     if TheWorld:HasTag("cave") then return end
 
-    if math.random() < 0.10 then
+    if math.random() < 0.20 then
         local container = inst.components.container
         if container ~= nil then
             local drop = SpawnPrefab("wiltolion_sundrop")
             if drop ~= nil then
                 local success = container:GiveItem(drop)
-                
-                if not success then
+                if success then
+                    -- STRUCTURAL REPAIR (2 units per sundrop)
+                    if inst.components.workable ~= nil and inst.components.workable.workleft < inst.components.workable.maxwork then
+                        local current_work = inst.components.workable.workleft
+                        local max_work = inst.components.workable.maxwork
+                        inst.components.workable:SetWorkLeft(math.min(current_work + 2, max_work))
+                    end
+                else
                     drop:Remove()
                 end
             end
@@ -266,28 +297,64 @@ local function GenerateSundrops(inst)
     end
 end
 
-local function CheckGems(inst)
-    if not inst.components.container then return end
+-- EVENT: Triggers instantly when an item is placed in the container
+local function OnItemGet(inst, data)
+    local item = data ~= nil and data.item or nil
+    if item == nil then return end
 
-    for gem_prefab, data in pairs(GEMS_DATA) do
-        if not inst.components.timer:TimerExists(data.timer) then
-            if inst.components.container:Has(gem_prefab, 1) then
-                inst.components.container:ConsumeByName(gem_prefab, 1)
-                
-                inst.components.timer:StartTimer(data.timer, data.duration)
-                inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
-                
-                UpdateAuras(inst)
+    local gem_info = GEMS_DATA[item.prefab]
+    if gem_info ~= nil then
+        if not inst.components.timer:TimerExists(gem_info.timer) then
+            -- Consume exactly 1 gem
+            inst.components.container:ConsumeByName(item.prefab, 1)
+            
+            -- Start the native timer
+            inst.components.timer:StartTimer(gem_info.timer, gem_info.duration)
+            inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
+            
+            -- Handle exact transition for opal
+            if item.prefab == "opalpreciousgem" then
+                inst.AnimState:PlayAnimation("active_ini", false)
+                inst.AnimState:PushAnimation("active", true)
             end
+            
+            UpdateAuras(inst)
         end
     end
 end
 
 local function OnTimerDone(inst, event_data)
     if event_data ~= nil and event_data.name ~= nil then
-        for _, data in pairs(GEMS_DATA) do
+        for gem_prefab, data in pairs(GEMS_DATA) do
             if event_data.name == data.timer then
-                UpdateAuras(inst)
+                
+                local container = inst.components.container
+                -- EVENT-DRIVEN AUTO-CONSUME: 
+                -- Check if we have another gem to immediately refresh the power
+                if container ~= nil and container:Has(gem_prefab, 1) then
+                    
+                    container:ConsumeByName(gem_prefab, 1)
+                    inst.components.timer:StartTimer(data.timer, data.duration)
+                    inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
+                    
+                    -- Trigger exact visual transition for opal refresh
+                    if gem_prefab == "opalpreciousgem" then
+                        inst.AnimState:PlayAnimation("active_ini", false)
+                        inst.AnimState:PushAnimation("active", true)
+                    end
+                    
+                    UpdateAuras(inst)
+                    
+                else
+                    -- No backup gem found, let the power die normally
+                    UpdateAuras(inst)
+                    
+                    -- Ensure it returns to standard visual state if the main power runs out
+                    if event_data.name == "power_opal" then
+                        PlayCorrectIdle(inst)
+                    end
+                end
+                
                 break
             end
         end
@@ -295,7 +362,7 @@ local function OnTimerDone(inst, event_data)
 end
 
 -- =========================================================
--- CREACIÓN DE LA ENTIDAD
+-- ENTITY CREATION
 -- =========================================================
 local function fn()
     local inst = CreateEntity()
@@ -310,7 +377,7 @@ local function fn()
     inst.entity:AddLight()
     inst.Light:SetFalloff(0.7)
     inst.Light:SetIntensity(0.75)
-    inst.Light:SetRadius(3.5)
+    inst.Light:SetRadius(5)
     inst.Light:SetColour(255/255, 255/255, 100/255)
     inst.Light:Enable(false)
     
@@ -336,9 +403,11 @@ local function fn()
     inst.components.container:WidgetSetup("wiltolion_pylon")
 
     inst:AddComponent("timer")
+    
+    -- Replaced periodic scan with event listener
+    inst:ListenForEvent("itemget", OnItemGet)
     inst:ListenForEvent("timerdone", OnTimerDone)
     
-    inst:DoPeriodicTask(5, CheckGems)
     inst:DoPeriodicTask(1, ApplyRadarPulses)
     inst:DoPeriodicTask(5, GenerateSundrops)
     
@@ -360,27 +429,29 @@ local function fn()
 
     inst:AddComponent("workable")
     inst.components.workable:SetWorkAction(ACTIONS.MINE)
-    inst.components.workable:SetWorkLeft(TUNING.ROCKS_MINE)
+    inst.components.workable:SetWorkLeft(40)
     inst.components.workable:SetOnFinishCallback(onmined)
     inst.components.workable:SetOnWorkCallback(onhit)
 
-    -- [[ NUEVOS LISTENERS INTEGRADOS CORRECTAMENTE ]]
     inst:ListenForEvent("onbuilt", function(inst)
         onbuilt(inst)
-        RegisterPylon(inst) -- Se anota al construirlo
+        RegisterPylon(inst)
     end)
 
-    inst:ListenForEvent("onremove", UnregisterPylon) -- Se borra al destruirlo
+    inst:ListenForEvent("onremove", UnregisterPylon)
 
     MakeHauntableWork(inst)
 
-    inst.OnLoad = function(inst)
+    inst.OnLoad = function(inst, data)
         inst:DoTaskInTime(0, function()
             UpdateAuras(inst)
-            RegisterPylon(inst) -- Se anota al cargar la partida guardada
+            RegisterPylon(inst)
+            
+            -- Enforce the correct visual state after world fully loads
+            PlayCorrectIdle(inst)
         end)
     end
-
+    
     return inst
 end
 

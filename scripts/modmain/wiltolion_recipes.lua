@@ -132,7 +132,10 @@ AddRecipe2(
     { 
         Ingredient("cutstone", 4),
         Ingredient("goldnugget", 2),
+        Ingredient("transistor", 2),
         Ingredient("wiltolion_sundrop", 10),
+        Ingredient("thulecite", 2),
+        Ingredient("gears", 2),         -- Mechanical complexity
     },
     TECH.SCIENCE_TWO,
     {
@@ -157,17 +160,18 @@ AddRecipe2(
 -- ==========================================
 AddRecipe2("wiltolion_thingy",
     {
-        GLOBAL.Ingredient("silk", 2),
-        GLOBAL.Ingredient("yellowgem", 1),
-        GLOBAL.Ingredient("papyrus", 1)
+        GLOBAL.Ingredient("silk", 3),
+        Ingredient("goldnugget", 2),
+        Ingredient("wiltolion_sundrop", 10),
+        Ingredient("spidergland", 1)
     },
     GLOBAL.TECH.NONE, 
     {
         builder_tag = "wiltolion_constel_4", 
         nounlock = true,
         -- Use the atlas and image you want to show in the crafting menu
-        atlas = "images/inventoryimages/wiltolion_buddy.xml", 
-        image = "wiltolion_buddy.tex", 
+        atlas = "images/inventoryimages/wiltolion_thingy.xml",
+        image = "wiltolion_thingy.tex",
     },
     {"CHARACTER", "MAGIC"}
 )

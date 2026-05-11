@@ -57,7 +57,7 @@ local function GetHealTarget(inst)
     local targets = TheSim:FindEntities(x, y, z, 15, { "_health" }, HEAL_CANT_TAGS, HEAL_MUSTONE_TAGS)
     
     local best_target = nil
-    local lowest_hp = 0.45 -- Strict 45% threshold
+    local lowest_hp = 0.35
     local current_time = GetTime()
 
     for _, target in ipairs(targets) do
