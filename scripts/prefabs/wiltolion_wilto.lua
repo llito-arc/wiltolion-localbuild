@@ -172,40 +172,90 @@ local function CategorizeItem(item)
 end
 
 
--- Busca en el inventario el mejor arma y se la equipa
-local function EquipWeaponForCombat(inst)
+-- =========================================================
+-- SMART EQUIPMENT SYSTEM
+-- =========================================================
+
+-- Evaluates the raw power of an item based on Klei's native stats
+local function GetItemScore(item)
+    if not item or not item:IsValid() then return 0 end
+    
+    -- Weapon score is driven by damage
+    if item.components.weapon ~= nil then
+        local dmg = item.components.weapon.damage or 0
+        if type(dmg) == "function" then dmg = 15 end -- Approximate dynamic damage
+        -- Penalize tools slightly so pure weapons are preferred
+        if item.components.tool ~= nil then dmg = dmg - 10 end 
+        return dmg
+    end
+    
+    -- Armor score is driven by absorption percentage (0.0 to 1.0)
+    if item.components.armor ~= nil then
+        return (item.components.armor.absorb_percent or 0) * 100
+    end
+    
+    return 0
+end
+
+-- Scans the entire inventory and equips the items with the highest score
+-- =========================================================
+-- SMART EQUIPMENT SYSTEM (Context Aware)
+-- =========================================================
+local function EquipBestGear(inst)
     local inv = inst.components.inventory
     if not inv then return end
 
-    local best_weapon = nil
-    local max_damage = 0
+    local current_weapon = inv:GetEquippedItem(EQUIPSLOTS.HANDS)
+    local current_armor = inv:GetEquippedItem(EQUIPSLOTS.BODY)
+    local current_helmet = inv:GetEquippedItem(EQUIPSLOTS.HEAD)
 
-    -- 1. Evaluamos lo que ya tiene en las manos
-    local current = inv:GetEquippedItem(EQUIPSLOTS.HANDS)
-    if current and current.components.weapon then
-        local dmg = current.components.weapon.damage or 0
-        if type(dmg) == "function" then dmg = dmg(inst, inst.components.combat.target) end
-        if current.components.tool then dmg = dmg - 10 end -- Penalizamos herramientas para preferir lanzas/espadas
-        max_damage = dmg
-    end
+    local best_weapon = current_weapon
+    local best_armor = current_armor
+    local best_helmet = current_helmet
 
-    -- 2. Buscamos en todo su inventario
-    for k, v in pairs(inv.itemslots) do
-        if v and v.components.weapon then
-            local dmg = v.components.weapon.damage or 0
-            if type(dmg) == "function" then dmg = dmg(inst, inst.components.combat.target) end
-            if v.components.tool then dmg = dmg - 10 end
-            
-            if dmg > max_damage then
-                max_damage = dmg
-                best_weapon = v
+    -- CONTEXT CONTROLLER: Is Wilto currently engaged in combat?
+    local in_combat = inst.components.combat ~= nil and inst.components.combat.target ~= nil
+
+    -- Scan inventory for the best replacement
+    for k, item in pairs(inv.itemslots) do
+        if item:IsValid() and item.components.equippable ~= nil then
+            local slot = item.components.equippable.equipslot
+            local score = GetItemScore(item)
+
+            if slot == EQUIPSLOTS.BODY then
+                if score > GetItemScore(best_armor) then
+                    best_armor = item
+                end
+            elseif slot == EQUIPSLOTS.HEAD then
+                if score > GetItemScore(best_helmet) then
+                    best_helmet = item
+                end
+            elseif slot == EQUIPSLOTS.HANDS then
+                if in_combat then
+                    -- COMBAT MODE: Actively override any tool for the highest damage weapon
+                    if score > GetItemScore(best_weapon) then
+                        best_weapon = item
+                    end
+                else
+                    -- PEACEFUL MODE: Respect currently equipped tools (like axes/pickaxes).
+                    -- Only force equip a weapon if his hands are completely empty.
+                    if current_weapon == nil and score > GetItemScore(best_weapon) then
+                        best_weapon = item
+                    end
+                end
             end
         end
     end
 
-    -- 3. Si encontró algo mejor que lo que tenía, se lo equipa
-    if best_weapon then
-        inv:Equip(best_weapon)
+    -- Perform the equip only if a better (or new) item was found
+    if best_weapon and best_weapon ~= current_weapon then 
+        inv:Equip(best_weapon) 
+    end
+    if best_armor and best_armor ~= current_armor then 
+        inv:Equip(best_armor) 
+    end
+    if best_helmet and best_helmet ~= current_helmet then 
+        inv:Equip(best_helmet) 
     end
 end
 
@@ -302,6 +352,43 @@ local function wiltofn()
     inst.components.combat:SetRetargetFunction(1, wiltoretargetfn)
     inst.components.combat:SetKeepTargetFunction(wiltokeeptargetfn)
     inst.ShouldFleeForSurvival = ShouldFleeForSurvival
+    
+    -- =========================================================
+    -- COMBAT INTERCEPTOR: TANKING, PERFECT DODGE & ANTI-STUNLOCK
+    -- =========================================================
+    local old_GetAttacked = inst.components.combat.GetAttacked
+    
+    inst.components.combat.GetAttacked = function(self, attacker, damage, weapon, stimuli)
+        local reduced_damage = damage * 0.5 
+        local time_now = GetTime()
+
+        -- STUNLOCK BREAKER: Check if Wilto is already in pain/busy
+        if inst.sg:HasStateTag("hit") or inst.sg:HasStateTag("busy") then
+            inst._stunlock_hits = (inst._stunlock_hits or 0) + 1
+        else
+            inst._stunlock_hits = 0
+        end
+
+        -- If Wilto receives a second hit while already stunned, force an emergency breakout
+        if inst._stunlock_hits >= 2 then
+            inst._stunlock_hits = 0
+            -- Pass the attacker to the StateGraph so Wilto knows which direction to jump away from
+            inst.sg:GoToState("perfect_dodge", attacker)
+            return true -- Negate this hit's damage completely
+        end
+
+        -- REGULAR PERFECT DODGE (25% chance, 5s cooldown, only when not busy)
+        if not inst.sg:HasStateTag("busy") and 
+           (inst._last_dodge_time == nil or (time_now - inst._last_dodge_time > 2)) then
+            
+            if math.random() < 0.25 then
+                inst._last_dodge_time = time_now
+                inst.sg:GoToState("perfect_dodge", attacker)
+                return true 
+            end
+        end
+        return old_GetAttacked(self, attacker, reduced_damage, weapon, stimuli)
+    end
 
     inst:AddComponent("follower")
     inst.components.follower:KeepLeaderOnAttacked()
@@ -341,11 +428,9 @@ local function wiltofn()
     inst._ignored_items = {}
     setmetatable(inst._ignored_items, {__mode = "k"})
 
-    -- Cuando entra en combate, saca su mejor arma (o se rinde si es pacifista)
+    -- When entering combat, evaluate and draw the best weapon available
     inst:ListenForEvent("newcombattarget", function(inst, data)
-        -- BARRERA EXTRA: Si un enemigo o el juego le fuerza un target, se rinde al instante.
         if inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false then
-            -- Lo hacemos en el siguiente frame para asegurar que el juego termine de asignarle el target primero
             inst:DoTaskInTime(0, function() 
                 if inst.components.combat then inst.components.combat:DropTarget() end 
             end)
@@ -353,11 +438,11 @@ local function wiltofn()
         end
         
         if data.target ~= nil then
-            EquipWeaponForCombat(inst)
+            EquipBestGear(inst)
         end
     end)
 
-    -- Gestión de inventario inteligente
+    -- Smart inventory management when receiving items
     inst:ListenForEvent("gotnewitem", function(inst, data)
         if data.item ~= nil and data.item.components.equippable ~= nil then
             inst:DoTaskInTime(0, function()
@@ -365,44 +450,44 @@ local function wiltofn()
                     return
                 end
                 
+                -- Reject items that cannot go in containers (like Chester's Eyebone)
                 if data.item.components.inventoryitem.cangoincontainer == false then
                     inst.components.inventory:DropItem(data.item, true, true)
                     return
                 end
 
-                local category = CategorizeItem(data.item)
-                if category and category ~= "other" then
-                    -- Busca si ya tiene otro objeto igual (ej. ya tiene un hacha)
-                    for k, v in pairs(inst.components.inventory.itemslots) do
-                        if v ~= data.item and CategorizeItem(v) == category then
-                            inst.components.inventory:DropItem(v, true, true)
-                            inst._ignored_items[v] = true
-                            inst:DoTaskInTime(10, function() if inst and inst._ignored_items then inst._ignored_items[v] = nil end end)
-                        end
-                    end
-                    for k, v in pairs(inst.components.inventory.equipslots) do
-                        if v ~= data.item and CategorizeItem(v) == category then
-                            inst.components.inventory:DropItem(v, true, true)
-                            inst._ignored_items[v] = true
-                            inst:DoTaskInTime(10, function() if inst and inst._ignored_items then inst._ignored_items[v] = nil end end)
-                        end
-                    end
-                end
-                
-                -- Si es armadura o casco, se lo pone siempre. Si es herramienta, solo si tiene las manos libres.
-                if category == "helmet" or category == "armor" then
-                    inst.components.inventory:Equip(data.item)
-                    inst.SoundEmitter:PlaySound("dontstarve/characters/wilson/equip_item")
-                else
-                    local in_hand = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.HANDS)
-                    if not in_hand then
-                        inst.components.inventory:Equip(data.item)
-                        inst.SoundEmitter:PlaySound("dontstarve/characters/wilson/equip_item")
-                    end
-                end
+                -- Trigger the smart equip logic to compare the new item with the current gear
+                EquipBestGear(inst)
+                inst.SoundEmitter:PlaySound("dontstarve/characters/wilson/equip_item")
             end)
         end
     end)
+
+    -- =========================================================
+    -- REPLACEMENT LOGIC (When items break)
+    -- =========================================================
+
+    -- Triggered specifically when an armor piece reaches 0 condition and shatters
+    inst:ListenForEvent("armorbroke", function(inst)
+        inst:DoTaskInTime(0.2, EquipBestGear)
+    end)
+
+    -- Triggered specifically when a weapon reaches 0 condition and breaks
+    inst:ListenForEvent("weaponbroke", function(inst)
+        inst:DoTaskInTime(0.2, EquipBestGear)
+    end)
+
+    -- Extra safety: Check equipment when performing an attack or working
+    -- This ensures he never swings with bare hands if he has a weapon available
+    local function CheckGearBeforeAction(inst)
+        local weapon = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.HANDS)
+        if weapon == nil then
+            EquipBestGear(inst)
+        end
+    end
+
+    inst:ListenForEvent("onattackother", CheckGearBeforeAction)
+    inst:ListenForEvent("working", CheckGearBeforeAction)
 
     inst:ListenForEvent("death", function(inst)
         -- 1. Suelta todo su equipo

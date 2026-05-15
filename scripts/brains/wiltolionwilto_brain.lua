@@ -467,6 +467,60 @@ end
 local RUN_AFTER_KITE_DELAY = 1
 
 -- =========================================================
+-- ADVANCED CHEAT KITING (Frame-Perfect & Cooldown Math)
+-- =========================================================
+local function ShouldCheatKite(inst)
+    local target = inst.components.combat.target
+    if target == nil or not target:IsValid() or target.components.health == nil or target.components.health:IsDead() then
+        return false
+    end
+
+    local t_combat = target.components.combat
+    if t_combat == nil then
+        return false
+    end
+
+    -- 1. EXPLOIT INCAPACITATION: Never dodge if the enemy cannot fight back
+    if target.components.sleeper and target.components.sleeper:IsAsleep() then return false end
+    if target.components.freezable and target.components.freezable:IsFrozen() then return false end
+    if target.sg and target.sg:HasStateTag("stunned") then return false end
+
+    -- 2. GET REAL TIME RANGES
+    -- Use the enemy's attack range plus their physics radius to get the true hit edge
+    local t_range = t_combat:GetAttackRange() + (target:GetPhysicsRadius(0) or 0) + 0.5
+    local dist_sq = inst:GetDistanceSqToInst(target)
+
+    -- If we are already out of the enemy's attack range, stop kiting and go attack!
+    if dist_sq > (t_range * t_range) then
+        return false
+    end
+
+    -- 3. ANIMATION CHECK: Is the enemy actively swinging right now?
+    -- "abouttoattack" is used in DST for pre-hit frames, "attack" for the swing
+    if target.sg and (target.sg:HasStateTag("attack") or target.sg:HasStateTag("abouttoattack")) then
+        return true
+    end
+
+    -- 4. COOLDOWN MATH (The core cheat)
+    -- Natively, DST combat components use lastdoattacktime or laststartattacktime
+    local last_attack = t_combat.laststartattacktime or t_combat.lastdoattacktime or 0
+    local attack_period = t_combat.min_attack_period or 2
+    local time_since_attack = GetTime() - last_attack
+    local time_to_next_attack = attack_period - time_since_attack
+
+    -- Wilto needs roughly 0.6 seconds to safely perform his own attack animation
+    -- If the enemy will be ready to strike in less than this time, back off
+    local WILTO_ATTACK_WINDUP = 0.6
+
+    if time_to_next_attack <= WILTO_ATTACK_WINDUP then
+        return true
+    end
+
+    -- If we survived all checks, it means we have a safe time window to strike
+    return false
+end
+
+-- =========================================================
 -- CEREBRO PRINCIPAL
 -- =========================================================
 function WiltolionWiltoBrain:OnStart()
@@ -486,21 +540,22 @@ function WiltolionWiltoBrain:OnStart()
         dance_party,
         watch_game,
         avoid_explosions,
+        
         WhileNode(function() 
-            -- Guardamos el objetivo actual en una variable temporal del objeto
+            -- Store the current target in a temporary variable
             self.inst.wilto_target_to_heal = GetHealTarget(self.inst)
             return self.inst.wilto_target_to_heal ~= nil 
         end, "Needs Healing",
             PriorityNode({
-                -- Si está cerca del herido, lanza la animación pasando el objetivo
+                -- If close to the wounded, trigger animation passing the target
                 WhileNode(function() return self.inst:IsNear(self.inst.wilto_target_to_heal, 2.5) end, "Do Heal",
                     ActionNode(function()
                         if not self.inst.sg:HasStateTag("busy") then
-                            -- IMPORTANTE: Pasamos el target en el evento
+                            -- IMPORTANT: Pass the target in the event
                             self.inst:PushEvent("do_heal_leader", { target = self.inst.wilto_target_to_heal })
                         end
                     end)),
-                -- Wilto ahora sigue al herido, no solo al líder
+                -- Wilto now follows the wounded, not just the leader
                 Follow(self.inst, function() return self.inst.wilto_target_to_heal end, 0, 1, 2)
             }, 0.25)
         ),
@@ -508,21 +563,43 @@ function WiltolionWiltoBrain:OnStart()
         RunAway(self.inst, { fn = IsDanger, tags = {"_combat", "_health"}, notags = {"INLIMBO", "player"} }, 10, 15),
         WhileNode(function() return self.inst.components.burnable and self.inst.components.burnable:IsBurning() end, "OnFire", Panic(self.inst)),
         
-        -- ¡EL SÚPER NODO DE ÓRDENES LIMPIO! (Ya no depende de wilto_state)
-        -- 1. SUPERVIVENCIA
-        -- DoAction(self.inst, FindMissingEquipmentToPickup, "Pickup Missing Equipment", true), YA NO ES NECESARIO
+        -- =======================================================
+        -- CLEAN ORDER NODE! (No longer depends on wilto_state)
+        -- =======================================================
+        
+        -- 1. SURVIVAL
+        -- DoAction(self.inst, FindMissingEquipmentToPickup, "Pickup Missing Equipment", true), NO LONGER NEEDED
 
-        -- 2. KLEI SYNCHRONIZED COMBAT (Kite + Attack)
-        WhileNode(function() return IsLeaderAttacking(self.inst) end, "is leader attacking",
-            ChaseAndAttack(self.inst)
+        -- =======================================================
+        -- 1. TACTICAL RETREAT (Force drop aggro if leader leaves)
+        -- =======================================================
+        WhileNode(function()
+            local leader = GetLeader(self.inst)
+            local target = self.inst.components.combat.target
+            -- If Wilto is fighting, but the leader is more than 15 units away from Wilto
+            return target ~= nil and leader ~= nil and self.inst:GetDistanceSqToInst(leader) > 225
+        end, "Retreat From Combat",
+            PriorityNode({
+                -- Force the combat component to clear its memory
+                FailIfSuccessDecorator(ActionNode(function() 
+                    self.inst.components.combat:DropTarget() 
+                end)),
+                -- Run back to the leader immediately
+                Follow(self.inst, GetLeader, 0, 3, 5)
+            }, 0.25)
         ),
 
-        WhileNode(function() return not IsLeaderAttacking(self.inst) and IsLeaderMoving(self.inst) and LeaderInRangeOfTarget(self.inst) end, "is leader not attacking",
-            -- Reduced distances: Flees if enemy is within 3 units, stops fleeing at 5 units
-            RunAway(self.inst, RUNAWAY_PARAM, 3, 5)
+        -- =======================================================
+        -- 2. CHEAT KITING COMBAT (Smart Dodge + Attack)
+        -- =======================================================
+        WhileNode(function() return ShouldCheatKite(self.inst) end, "Cheat Kiting",
+            RunAway(self.inst, function(guy) 
+                return guy == self.inst.components.combat.target 
+            end, 3, 4) 
         ),
+        ChaseAndAttack(self.inst),
 
-        -- 3. TRABAJAR Y RECOGER
+        -- 3. WORK AND GATHER
         WhileNode(
             function() return not self.inst.sg:HasStateTag("recoil") end,
             "<busy state guard>",
@@ -538,16 +615,15 @@ function WiltolionWiltoBrain:OnStart()
                     end)),
                 FailIfSuccessDecorator(ConditionWaitNode(function() return not self.keepworking end, "Repeating action")),
 
-                -- ¡AQUÍ ESTÁ NUESTRA NUEVA ORDEN!
+                -- HARVEST & GATHER ACTIONS
                 DoAction(self.inst, FindPlantToPick, "Harvest Plants", true),
-
                 DoAction(self.inst, FindResourceToPickup, "Pickup Resources", true),
             }, 0.25)),
 
-        -- 4. DAR RECURSOS AL LÍDER
+        -- 4. GIVE RESOURCES TO LEADER
         DoAction(self.inst, GiveResourcesToLeader, "Give Resources", true),
 
-        -- 5. ESTADOS DE SEGUIMIENTO E INACTIVIDAD
+        -- 5. FOLLOW AND IDLE STATES
         SequenceNode{
             ConditionWaitNode(function()
                 return self.inst._lastruntime == nil or (GetTime() - self.inst._lastruntime > RUN_AFTER_KITE_DELAY)

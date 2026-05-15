@@ -98,6 +98,20 @@ local function onbuilt(inst)
 end
 
 -- =========================================================
+-- CLIENT-SIDE VISUALS (NETWORK SYNC)
+-- Synchronizes the bloom effect across dedicated servers
+-- =========================================================
+local function OnOpalDirty(inst)
+    if inst._is_opal_active:value() then
+        inst.AnimState:SetSymbolBloom("eyes")
+        inst.AnimState:SetSymbolLightOverride("eyes", 1.0)
+    else
+        inst.AnimState:ClearSymbolBloom("eyes")
+        inst.AnimState:SetSymbolLightOverride("eyes", 0.0)
+    end
+end
+
+-- =========================================================
 -- NERVOUS SYSTEM: AURAS, RADAR AND VISUALS
 -- =========================================================
 local function UpdateAuras(inst)
@@ -113,18 +127,20 @@ local function UpdateAuras(inst)
     local multiplier = has_opal and 1.5 or 1.0
 
     -- ==========================================
-    -- 1. VISUAL FEEDBACK: DIVINE SPAWN AURA
+    -- 1. VISUAL FEEDBACK: DIVINE SPAWN AURA & GLOWING EYES
     -- ==========================================
     if has_opal then
         if inst._opal_shield_fx == nil then
             inst._opal_shield_fx = SpawnPrefab("spawnprotectionbuff")
-            
             if inst._opal_shield_fx ~= nil then
                 inst._opal_shield_fx.entity:SetParent(inst.entity)
                 inst._opal_shield_fx.Transform:SetPosition(0, 0.2, 0)
                 inst._opal_shield_fx.Transform:SetScale(1.6, 1.6, 1.6)
             end
         end
+        
+        -- Tell all clients to turn ON the bloom
+        inst._is_opal_active:set(true)
     else
         if inst._opal_shield_fx ~= nil then
             if inst._opal_shield_fx:IsValid() then
@@ -132,17 +148,20 @@ local function UpdateAuras(inst)
             end
             inst._opal_shield_fx = nil
         end
+        
+        -- Tell all clients to turn OFF the bloom
+        inst._is_opal_active:set(false)
     end
 
     -- ==========================================
     -- DYNAMIC COLOR MIXER (Additive Tint)
     -- ==========================================
     local r, g, b = 0, 0, 0
-    if has_red then r = r + 0.15 end
-    if has_blue then b = b + 0.15 end
+    if has_red then r = r + 0.1 end
+    if has_blue then b = b + 0.1 end
     if has_yellow then r = r + 0.1; g = g + 0.1 end
     if has_purple then r = r + 0.1; b = b + 0.1 end
-    if timer:TimerExists("power_green") then g = g + 0.15 end
+    if timer:TimerExists("power_green") then g = g + 0.1 end
 
     inst.AnimState:SetAddColour(math.min(r, 0.3), math.min(g, 0.3), math.min(b, 0.3), 0)
 
@@ -304,22 +323,30 @@ local function OnItemGet(inst, data)
 
     local gem_info = GEMS_DATA[item.prefab]
     if gem_info ~= nil then
-        if not inst.components.timer:TimerExists(gem_info.timer) then
-            -- Consume exactly 1 gem
-            inst.components.container:ConsumeByName(item.prefab, 1)
-            
-            -- Start the native timer
-            inst.components.timer:StartTimer(gem_info.timer, gem_info.duration)
-            inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
-            
-            -- Handle exact transition for opal
-            if item.prefab == "opalpreciousgem" then
-                inst.AnimState:PlayAnimation("active_ini", false)
-                inst.AnimState:PushAnimation("active", true)
+        -- Delay the consumption by exactly 1 tick (0 seconds)
+        -- This prevents the "ghost item" UI desync bug in DST containers
+        inst:DoTaskInTime(0, function()
+            -- Double check the item is still there and the timer hasn't started
+            if inst.components.container ~= nil and inst.components.container:Has(item.prefab, 1) then
+                if not inst.components.timer:TimerExists(gem_info.timer) then
+                    
+                    -- Consume exactly 1 gem safely
+                    inst.components.container:ConsumeByName(item.prefab, 1)
+                    
+                    -- Start the native timer
+                    inst.components.timer:StartTimer(gem_info.timer, gem_info.duration)
+                    inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
+                    
+                    -- Handle exact transition for opal
+                    if item.prefab == "opalpreciousgem" then
+                        inst.AnimState:PlayAnimation("active_ini", false)
+                        inst.AnimState:PushAnimation("active", true)
+                    end
+                    
+                    UpdateAuras(inst)
+                end
             end
-            
-            UpdateAuras(inst)
-        end
+        end)
     end
 end
 
@@ -388,6 +415,13 @@ local function fn()
     inst.AnimState:SetBank("wiltolion_pylon")
     inst.AnimState:SetBuild("wiltolion_pylon")
     inst.AnimState:PlayAnimation("idle", true)
+
+    -- NETWORK VARIABLES
+    -- This boolean syncs the opal visual state from the server to all clients
+    inst._is_opal_active = net_bool(inst.GUID, "wiltolion_pylon._is_opal_active", "opal_dirty")
+    
+    -- Listen for the network event to trigger the bloom
+    inst:ListenForEvent("opal_dirty", OnOpalDirty)
 
     inst:AddTag("structure")
     inst:AddTag("wiltolion_pylon")

@@ -158,6 +158,36 @@ local pylon_descriptions = {
     WANDA = "A crude manipulation of space, but it saves precious time.",
 }
 
+-- =========================================================
+-- CHARACTER DESCRIPTIONS FOR WILTOLION THINGY
+-- =========================================================
+local thingy_descriptions = {
+    GENERIC = "An unusual arachnid. It seems to weave light instead of silk.",
+    WILLOW = "Usually I'd burn any spider, but this one is actually helpful.",
+    WOLFGANG = "Wolfgang is confused. Is scary spider, but makes Wolfgang feel strong!",
+    WENDY = "It mends the flesh, but the heart remains forever broken.",
+    WX78 = "BIOLOGICAL REPAIR DRONE DETECTED.",
+    WICKERBOTTOM = "A fascinating mutation of Araneae, possessing restorative bioluminescence.",
+    WOODIE = "That's a weird looking glowing bug, eh?",
+    WAXWELL = "Someone went through a lot of trouble to make a pest look pretty.",
+    WIGFRID = "A radiant little beast to mend our battle wounds!",
+    WEBBER = "Wow! A shiny new spider friend! Can we keep it?",
+    WINONA = "Handy little critter to have around when you take a beating.",
+    WARLY = "Its presence is quite comforting, much like a warm hearth.",
+    WORTOX = "Hyuyu! A little web-spinner that heals instead of bites!",
+    WORMWOOD = "Bright webby bug helps friends.",
+    WURT = "Glowing web-bug! Don't bite, florp!",
+    WALTER = "A bioluminescent healing spider! I need to sketch this in my journal.",
+    WANDA = "A useful little creature. Healing up saves precious time."
+}
+
+for char, line in pairs(thingy_descriptions) do
+    if STRINGS.CHARACTERS[char] then
+        if not STRINGS.CHARACTERS[char].DESCRIBE then STRINGS.CHARACTERS[char].DESCRIBE = {} end
+        STRINGS.CHARACTERS[char].DESCRIBE.WILTOLION_THINGY = line
+    end
+end
+
 -- Inyectar de forma segura los diálogos
 for char, line in pairs(journal_descriptions) do
     if STRINGS.CHARACTERS[char] then
@@ -223,9 +253,13 @@ STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTO_JOURNAL = "It's full of cool doodles
 
 STRINGS.NAMES.WILTOLION_WILTO = "Wilto"
 STRINGS.NAMES.WILTOLION_WILTO_BUILDER = "Echo of Wilto"
-STRINGS.RECIPE_DESC.WILTOLION_WILTO_BUILDER = "Summon a loyal companion forged from light and sorrow."
+STRINGS.RECIPE_DESC.WILTOLION_WILTO_BUILDER = "Summon an echo of Wilto."
 STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_WILTO_BUILDER = "A comforting reminder of Him."
 STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_WILTO = "I know you're just an echo... but I'm still so glad you're here!"
+
+STRINGS.NAMES.WILTOLION_THINGY = "Sun Spider"
+STRINGS.RECIPE_DESC.WILTOLION_THINGY = "Summon a healing companion of pure light."
+STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_THINGY = "Keep shining, my little friend!"
 
 STRINGS.NAMES.WILTOLION_PYLON = "Sunflower Rock Pylon"
 STRINGS.RECIPE_DESC.WILTOLION_PYLON = "A statue that represents hope."
@@ -234,15 +268,15 @@ STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_PYLON = "It's one of those super
 GLOBAL.STRINGS.UI.HUD.PYLON_TOOCLOSE = "It's too close to another Pylon!"
 
 -- Añadimos los textos para que no aparezcan códigos en la UI
-STRINGS.SKILLTREE.WILTOLION = {
-    -- Títulos de las Ramas (ORDERS)
-    CATEGORY_CORE = "NÚCLEO SOLAR",
-    CATEGORY_CHASSIS = "CHASIS",
-    CATEGORY_UTILITY = "UTILIDAD",
-    CATEGORY_ALLEGIANCE = "AFILIACIÓN",
+--STRINGS.SKILLTREE.WILTOLION = {
+--    -- Títulos de las Ramas (ORDERS)
+--    CATEGORY_CORE = "NÚCLEO SOLAR",
+--    CATEGORY_CHASSIS = "CHASIS",
+--    CATEGORY_UTILITY = "UTILIDAD",
+--    CATEGORY_ALLEGIANCE = "AFILIACIÓN",
 
-    -- Ejemplo para una habilidad específica
-    -- El nombre debe coincidir con el ID que pusiste en el .lua (ej: wiltolion_core_1)
-    WILTOLION_CORE_1_TITLE = "Combustión Eficiente I",
-    WILTOLION_CORE_1_DESC = "Tu núcleo consume el hambre un poco más lento.",
-}
+--    -- Ejemplo para una habilidad específica
+--    -- El nombre debe coincidir con el ID que pusiste en el .lua (ej: wiltolion_core_1)
+--    WILTOLION_CORE_1_TITLE = "Combustión Eficiente I",
+--    WILTOLION_CORE_1_DESC = "Tu núcleo consume el hambre un poco más lento.",
+--}

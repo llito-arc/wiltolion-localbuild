@@ -201,6 +201,56 @@ local states =
     },
 
     State{
+        name = "perfect_dodge",
+        tags = {"busy", "evading", "noattack", "nopredict"},
+        
+        onenter = function(inst, attacker)
+            inst.components.locomotor:Stop()
+            inst.AnimState:PlayAnimation("jumpout") 
+            inst.SoundEmitter:PlaySound("dontstarve/movement/bodyfall_dirt")
+            
+            -- Ensure Wilto faces the threat so the backward velocity pushes him to safety
+            if attacker ~= nil and attacker:IsValid() then
+                inst:ForceFacePoint(attacker.Transform:GetWorldPosition())
+            end
+            
+            -- Fast physical push backward (increased speed to escape AOE)
+            inst.Physics:SetMotorVelOverride(-12, 0, 0) 
+            
+            -- Grant temporary invulnerability (I-Frames)
+            if inst.components.health ~= nil then
+                inst.components.health:SetInvincible(true)
+            end
+        end,
+        
+        timeline = {
+            -- Stop the backward slide early to regain control
+            FrameEvent(8, function(inst) 
+                inst.Physics:ClearMotorVelOverride() 
+            end),
+            -- Remove invulnerability slightly after the slide stops
+            FrameEvent(14, function(inst) 
+                if inst.components.health ~= nil then
+                    inst.components.health:SetInvincible(false)
+                end
+            end),
+        },
+        
+        events = {
+            EventHandler("animover", function(inst) 
+                inst.sg:GoToState("idle") 
+            end),
+        },
+        
+        onexit = function(inst)
+            inst.Physics:ClearMotorVelOverride()
+            if inst.components.health ~= nil then
+                inst.components.health:SetInvincible(false)
+            end
+        end,
+    },
+
+    State{
         name = "run",
         tags = {"moving", "running", "canrotate"},
         onenter = function(inst)

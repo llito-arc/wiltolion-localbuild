@@ -127,9 +127,9 @@ local function OnHealTick(inst)
             if inst:IsNear(target, 4) then
                 local hp_pct = target.components.health:GetPercent()
                 
-                -- Target is valid and within the healing window (under 65%)
-                if hp_pct < 0.65 then
-                    local heal_power = 5
+                -- Target is valid and within the healing window (under 55%)
+                if hp_pct < 0.55 then
+                    local heal_power = 10
                     target.components.health:DoDelta(heal_power, false, inst.prefab)
                     
                     -- Track the total amount healed for this specific target
@@ -145,13 +145,13 @@ local function OnHealTick(inst)
                     inst:PushEvent("play_subtle_heal")
                     inst.SoundEmitter:PlaySound("webber1/creatures/spider_cannonfodder/heal_fartcloud")
                     
-                    -- Check stop conditions: reached 65% HP OR reached the 150 HP healing cap
-                    if target.components.health:GetPercent() >= 0.65 or inst.heal_amounts[target.GUID] >= 150 then
+                    -- Check stop conditions: reached 55% HP OR reached the 150 HP healing cap
+                    if target.components.health:GetPercent() >= 0.55 or inst.heal_amounts[target.GUID] >= 150 then
                         inst.heal_blacklist[target.GUID] = current_time + 90
                         inst.target_to_heal = nil
                     end
                 else
-                    -- Fail-safe: Target is somehow above 65%, blacklist and drop
+                    -- Fail-safe: Target is somehow above 55%, blacklist and drop
                     inst.heal_blacklist[target.GUID] = current_time + 90
                     inst.target_to_heal = nil
                 end
