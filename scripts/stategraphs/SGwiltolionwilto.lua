@@ -46,6 +46,8 @@ local actionhandlers =
     ActionHandler(ACTIONS.GIVE, "give"),
     ActionHandler(ACTIONS.GIVEALLTOPLAYER, "give"),
     ActionHandler(ACTIONS.DROP, "give"),
+    ActionHandler(ACTIONS.STORE, "give"),
+    --ActionHandler(ACTIONS.STORE, "store_item"),
     ActionHandler(ACTIONS.PICKUP, "take"),
     ActionHandler(ACTIONS.CHECKTRAP, "take"),
     ActionHandler(ACTIONS.PICK,

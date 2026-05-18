@@ -2187,7 +2187,7 @@ return {
         CHESSPIECE_WORMBOSS = "It still shakes me up.",
         CHESSPIECE_YOTS = "I usually try to stay away from gold diggers.",
         CHESSPIECE_WAGBOSS_ROBOT = "Great design, questionable execution.",
-        CHESSPIECE_WAGBOSS_LUNAR = "I'm over the moon.",
+        CHESSPIECE_WAGBOSS_LUNAR = "I'm over the night!",
         CHESSPIECE_YOTH = "That was a rough knight.",
 
         CHESSJUNK1 = "Aww, someone broke the stone toys.",
@@ -3957,7 +3957,7 @@ return {
         },
 
         MOONGLASSAXE = "A super-sharp, shiny night-chopper!",
-        GLASSCUTTER = "A very sharp, sparkly poke-sword! Be careful!",
+        GLASSCUTTER = "This nightsword makes me feel brave!",
 
         ICEBERG =
         {
@@ -4429,8 +4429,8 @@ return {
 
         HERMITCRAB = "The little shell-lady lives all alone by the splashy-water.",
 
-        HERMIT_PEARL = "A giant shiny moon-pearl! I'll keep it super safe.",
-        HERMIT_CRACKED_PEARL = "Uh oh... the shiny moon-pearl got a big boo-boo.",
+        HERMIT_PEARL = "A giant shiny night-pearl! I'll keep it super safe.",
+        HERMIT_CRACKED_PEARL = "Uh oh... the shiny night-pearl got a big boo-boo.",
 
         -- DSEAS
         WATERPLANT = "Big splashy-plants! Don't make them mad or they'll spit at us!",
@@ -4479,7 +4479,7 @@ return {
         LIGHTFLIER = "Holding this buzzy little star-bug makes me feel floaty!",
 
         GROTTO_POOL_BIG = "A puddle of magic star-water making shiny glass! Amazing!",
-        GROTTO_POOL_SMALL = "Sparkly moon-water turning into shiny rocks!",
+        GROTTO_POOL_SMALL = "Sparkly night-water turning into shiny rocks!",
 
         DUSTMOTH = "What a cute little flutter-bug! It cleans up all the mess.",
 
@@ -6083,7 +6083,7 @@ return {
     DESCRIBE_PLANTSTRESSOROVERCROWDING = "Too many green-friends in one spot! They don't have enough room to stretch their leafy arms!",
     DESCRIBE_PLANTSTRESSORSEASON = "The clouds are making the wrong weather-magic for this little plant.",
     DESCRIBE_PLANTSTRESSORMOISTURE = "It's super thirsty! It needs a big drink of splashy sky-juice.",
-    DESCRIBE_PLANTSTRESSORNUTRIENTS = "Its tummy-nebula is completely empty! It's begging for a stinky-snack.",
+    DESCRIBE_PLANTSTRESSORNUTRIENTS = "Its tummy is completely empty! It's begging for a stinky-snack.",
     DESCRIBE_PLANTSTRESSORHAPPINESS = "It wants a friend to talk to! Should I tell it a story about the stars?",
 
     EAT_FOOD =

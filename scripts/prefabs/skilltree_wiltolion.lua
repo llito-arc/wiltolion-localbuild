@@ -69,14 +69,14 @@ local function BuildSkillsData(SkillTreeFns)
 
     -- Solar Flare Nodes (1-8)
     local solar_flares = {
-        { title = "Toasty Tummy",        desc = "When it gets nice and toasty inside, little sunbursts happily zap anything nearby especially tasty snacks.", icon = "skilltree2", },
+        { title = "Toasty Tummy",        desc = "When it gets nice and toasty inside, little sunbursts happily zap any nearby snacks.", icon = "skilltree2", },
         { title = "Shiny Hunt",          desc = "Wiltolion just *has* to double-check every stone... what if one sparkles back?", icon = "skilltree3",},
         { title = "Sunfly buddies",      desc = "Learn how to call tiny Sunfly buddies to flutter by your side.", icon = "skilltree4",},
         { title = "Echo Wilto",          desc = "Summon a cheeky echo of Wilto to lend a friendly hand.", icon = "skilltree5", },
-        { title = "Sunny drops",         desc = "Use Sundrops as fuel to keep the glow going strong.", icon = "skilltree6", },
+        { title = "Sunny drops",         desc = "Use Sundrops as fuel to magiluminescence.", icon = "skilltree6", },
         { title = "Sparkly Crafting",    desc = "Discover fun new ways to tinker with Opal and Yellow Staves.", icon = "skilltree7",},
-        { title = "Shimmer Tricks",      desc = "Wands feel lighter, brighter, and a tiny bit more magical to use.", icon = "skilltree8",},
-        { title = "Sunny Crown",         desc = "Learn to make a warm, glowy helmet that hugs you like sunshine.", icon = "skilltree9",},
+        { title = "Shimmer Tricks",      desc = "Wands feel lighter, brighter, and a bit more magical to use.", icon = "skilltree8",},
+        { title = "Sunny Crown",         desc = "Learn to make your own space-donut!", icon = "skilltree9",},
     }
 
     for i = 1, 8 do
@@ -117,10 +117,10 @@ local function BuildSkillsData(SkillTreeFns)
     }
 
     local constel_data = {
-        { title = "Adventure Diary",    desc = "A cozy little journal to share adventures with Wilto.", icon = "skilltree10",  },
+        { title = "Adventure Diary",    desc = "A cozy journal to share adventures with Wilto.", icon = "skilltree10",  },
         { title = "Sunflower Friend",   desc = "Build a big, quiet sunflower statue that always seems to watch over you.", icon = "skilltree11", },
-        { title = "Celestial Hop",      desc = "Learn to hop between sunflower friends in a blink, like a playful little breeze.", icon = "skilltree12", },
-        { title = "???",                desc = "Something is waiting to grow here... not just yet.", icon = "skilltree13", },
+        { title = "Celestial Hop",      desc = "Learn to hop between sunflower friends in a blink!.", icon = "skilltree12", },
+        { title = "Sun Spider",         desc = "Summon a tiny spider that heals you and your allies.", icon = "skilltree13", },
     }
 
     for i = 1, 4 do
@@ -157,7 +157,7 @@ local function BuildSkillsData(SkillTreeFns)
     
     skills.wiltolion_lunar_1 = {
         title = "Moon-Biting Mirage",
-        desc = "Wilto calls out to the Moon for help, and it sends a swarm of hungry little Gestalts to nibble at his foes.",
+        desc = "Wilto calls out to the night friend for help, and it sends a swarm of hungry little Gestalts to nibble at his foes.",
         icon = "wilson_favor_lunar", 
         pos = {LUNAR_1_X, LUNAR_1_Y},
         group = "lunar", 
@@ -180,7 +180,7 @@ local function BuildSkillsData(SkillTreeFns)
     
     skills.wiltolion_lunar_2 = {
         title = "Moony Bond",
-        desc = "Moonglass tools and weapons feel extra happy in your hands, working well for you.",
+        desc = "Night tools and weapons feel extra happy in your hands, working well for you.",
         icon = "skilltree14", 
         pos = {LUNAR_2_X, LUNAR_2_Y},
         group = "lunar", 

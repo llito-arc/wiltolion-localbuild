@@ -12,13 +12,12 @@ local food_affinities = {
 -- [[ SECTION: FORCEFIELD LOGIC ]]
 local FORCEFIELD_DURATION = 15
 local FORCEFIELD_COOLDOWN = 120
-local HITS_REQUIRED = 4
-local HIT_WINDOW = 1.5
+local HITS_REQUIRED = 3
+local HIT_WINDOW = 2.0
 
--- Notifica al gestor del jugador (en el modmain) para que actualice el bloom
+-- Notify the player's client to handle visual blooms
 local function NotifyOwnerVisuals(inst, is_glowing)
     if inst.components.inventoryitem then
-        -- GetGrandOwner asegura que encontremos al jugador incluso si el Torus está dentro de una mochila equipada
         local owner = inst.components.inventoryitem:GetGrandOwner()
         if owner and owner:HasTag("player") then
             owner:PushEvent("wiltolion_torus_statechange", { is_glowing = is_glowing })
@@ -26,46 +25,52 @@ local function NotifyOwnerVisuals(inst, is_glowing)
     end
 end
 
--- Apagar el escudo de fuerza
+-- Safely turns off the forcefield, removing FX and restoring original mechanics
 local function TurnOffForceField(inst, owner_override)
     local owner = owner_override or inst._forcefield_owner or (inst.components.inventoryitem and inst.components.inventoryitem.owner)
     
+    inst._forcefield_active = false
+
+    if owner and owner:IsValid() then
+        -- Remove native tag to allow hit stun again
+        owner:RemoveTag("forcefield")
+        
+        -- Restore original ApplyDamage logic
+        if owner.components.inventory and inst._original_applydamage ~= nil then
+            owner.components.inventory.ApplyDamage = inst._original_applydamage
+            inst._original_applydamage = nil
+        end
+    end
+
+    -- Clean up Forcefield FX
     if inst._fx ~= nil then
-        inst._fx:kill_fx()
+        if inst._fx:IsValid() then
+            inst._fx:kill_fx()
+        end
         inst._fx = nil
     end
     
-    if owner and owner:IsValid() then
-        if owner.components.health then
-            owner.components.health:SetInvincible(false)
-        end
-        if owner.components.inventory and inst._original_applydamage ~= nil then
-            if owner.components.inventory.ApplyDamage == inst._torus_applydamage then
-                owner.components.inventory.ApplyDamage = inst._original_applydamage
-            end
-        end
-    end
-    
     inst._forcefield_owner = nil
-    inst._original_applydamage = nil
-    inst._torus_applydamage = nil
     
+    -- Cancel the duration task if it's still running
     if inst._forcefield_task ~= nil then
         inst._forcefield_task:Cancel()
         inst._forcefield_task = nil
     end
 end
 
--- Encender el escudo de fuerza
+-- Triggers the forcefield, preventing stun, armor degradation, and health loss
 local function TurnOnForceField(inst, owner)
     inst._on_cooldown = true
-    inst._hit_count = 0
-    
-    -- El Torus se apaga por el esfuerzo (Avisamos al jugador)
-    NotifyOwnerVisuals(inst, false)
-    
+    inst._forcefield_active = true
     inst._forcefield_owner = owner 
     
+    -- Adds native Klei tag to prevent StateGraph hit stunlock
+    owner:AddTag("forcefield")
+    
+    NotifyOwnerVisuals(inst, false)
+    
+    -- Spawn native forcefield FX
     if inst._fx ~= nil then
         inst._fx:kill_fx()
     end
@@ -75,45 +80,55 @@ local function TurnOnForceField(inst, owner)
     inst._fx.AnimState:SetMultColour(0.6, 0.6, 0.6, 0.9) 
     inst._fx.AnimState:SetAddColour(0.8, 0.8, 0.4, 0) 
     
-    if owner.components.health then
-        owner.components.health:SetInvincible(true)
-    end
-    
+    -- Monkey-patch ApplyDamage to absorb 100% damage and prevent ALL armor degradation
     if owner.components.inventory and inst._original_applydamage == nil then
         inst._original_applydamage = owner.components.inventory.ApplyDamage
-        inst._torus_applydamage = function(self, damage, attacker, weapon)
-            if inst._fx ~= nil then return damage end
-            return inst._original_applydamage(self, damage, attacker, weapon)
+        owner.components.inventory.ApplyDamage = function(inv_self, damage, attacker, weapon)
+            if inst._forcefield_active then
+                -- Return 0 damage left for health. Armor components are bypassed.
+                return 0 
+            end
+            return inst._original_applydamage(inv_self, damage, attacker, weapon)
         end
-        owner.components.inventory.ApplyDamage = inst._torus_applydamage
     end
     
-    inst._forcefield_task = inst:DoTaskInTime(FORCEFIELD_DURATION, TurnOffForceField)
+    -- Schedule forcefield turn-off
+    inst._forcefield_task = inst:DoTaskInTime(FORCEFIELD_DURATION, TurnOffForceField, owner)
     
-    -- Iniciar cuenta regresiva para que vuelva a brillar
-    inst:DoTaskInTime(FORCEFIELD_COOLDOWN, function(i) 
+    -- Schedule cooldown completion
+    inst._cooldown_task = inst:DoTaskInTime(FORCEFIELD_COOLDOWN, function(i) 
         i._on_cooldown = false 
-        -- Cooldown termina (Avisamos al jugador para que el bloom regrese)
         NotifyOwnerVisuals(i, true)
     end)
 end
 
+-- Rolling Window Hit Tracker
 local function OnAttacked(inst, owner, data)
-    if inst._on_cooldown or inst._fx ~= nil then return end
+    if inst._on_cooldown or inst._forcefield_active then return end
     
-    local current_time = GetTime()
-    if current_time - (inst._hit_window_start or 0) > HIT_WINDOW then
-        inst._hit_count = 1
-        inst._hit_window_start = current_time
-    else
-        inst._hit_count = (inst._hit_count or 0) + 1
+    -- Initialize the hit tracker array if it doesn't exist
+    if inst._recent_hits == nil then
+        inst._recent_hits = {}
     end
     
-    if inst._hit_count >= HITS_REQUIRED then
+    local current_time = GetTime()
+    table.insert(inst._recent_hits, current_time)
+    
+    -- Clean up hits that fall outside the HIT_WINDOW timeframe
+    for i = #inst._recent_hits, 1, -1 do
+        if current_time - inst._recent_hits[i] > HIT_WINDOW then
+            table.remove(inst._recent_hits, i)
+        end
+    end
+    
+    -- Trigger forcefield if required hits are accumulated
+    if #inst._recent_hits >= HITS_REQUIRED then
+        inst._recent_hits = {} -- Reset accumulator
         TurnOnForceField(inst, owner)
     end
 end
 
+-- Handles movement speed changes based on the day cycle
 local function UpdateSpeed(inst, owner)
     if not owner or not owner:IsValid() then return end
     local mult = 1.0 
@@ -139,7 +154,6 @@ local function OnEquip(inst, owner)
         owner.AnimState:Hide("HEAD_HAT")
     end
 
-    -- El LightOverride funciona nativamente sin desincronizar redes, podemos dejarlo.
     owner.AnimState:SetSymbolLightOverride("swap_hat", 1)
 
     UpdateSpeed(inst, owner)
@@ -149,7 +163,6 @@ local function OnEquip(inst, owner)
     inst._onattacked = function(owner_inst, data) OnAttacked(inst, owner_inst, data) end
     inst:ListenForEvent("attacked", inst._onattacked, owner)
 
-    -- Le decimos al jugador que hemos sido equipados y si debemos brillar o no
     NotifyOwnerVisuals(inst, not inst._on_cooldown)
 end
 
@@ -169,6 +182,7 @@ local function OnUnequip(inst, owner)
     if owner.components.locomotor then
         owner.components.locomotor:RemoveExternalSpeedMultiplier(inst, "wiltolion_torus_speed")
     end
+    
     inst:StopWatchingWorldState("isday")
     inst:StopWatchingWorldState("isnight")
     
@@ -176,7 +190,12 @@ local function OnUnequip(inst, owner)
         inst:RemoveEventCallback("attacked", inst._onattacked, owner)
         inst._onattacked = nil
     end
+    
+    -- Safely disable forcefield upon unequipping to prevent logic leaks
     TurnOffForceField(inst, owner)
+    
+    -- Clear hit tracker
+    inst._recent_hits = {}
 end
 
 local function fn()
@@ -191,7 +210,6 @@ local function fn()
     inst.AnimState:SetBuild("wiltolion_torus")
     inst.AnimState:PlayAnimation("ground")
     
-    -- El objeto en el suelo brilla nativamente (Klei maneja esto sin problemas)
     inst.AnimState:SetLightOverride(1)
     inst.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
     
@@ -204,10 +222,10 @@ local function fn()
         return inst
     end
     
-    -- Variables del Servidor
-    inst._hit_count = 0
-    inst._hit_window_start = 0
+    -- Server-side variables
+    inst._recent_hits = {}
     inst._on_cooldown = false
+    inst._forcefield_active = false
     inst._fx = nil
     
     inst:AddComponent("inventoryitem")
@@ -215,6 +233,7 @@ local function fn()
     inst.components.inventoryitem.atlasname = "images/inventoryimages/wiltolion_torus.xml"
     
     inst:AddComponent("armor")
+    -- Base absorption, active forcefield intercept handles 100% absorption
     inst.components.armor:InitIndestructible(0.20)
     
     inst:AddComponent("equippable")

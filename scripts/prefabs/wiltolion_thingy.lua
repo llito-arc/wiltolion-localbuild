@@ -246,8 +246,6 @@ local function fn()
     inst.components.eater:SetCanEatHorrible()
     inst.components.eater:SetStrongStomach(true)
     inst.components.eater:SetCanEatRawMeat(true)
-
-    MakeMediumBurnableCharacter(inst, "body")
     MakeMediumFreezableCharacter(inst, "body")
     MakeHauntablePanic(inst)
 

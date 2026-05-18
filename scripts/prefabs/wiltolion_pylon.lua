@@ -138,8 +138,6 @@ local function UpdateAuras(inst)
                 inst._opal_shield_fx.Transform:SetScale(1.6, 1.6, 1.6)
             end
         end
-        
-        -- Tell all clients to turn ON the bloom
         inst._is_opal_active:set(true)
     else
         if inst._opal_shield_fx ~= nil then
@@ -148,22 +146,8 @@ local function UpdateAuras(inst)
             end
             inst._opal_shield_fx = nil
         end
-        
-        -- Tell all clients to turn OFF the bloom
         inst._is_opal_active:set(false)
     end
-
-    -- ==========================================
-    -- DYNAMIC COLOR MIXER (Additive Tint)
-    -- ==========================================
-    local r, g, b = 0, 0, 0
-    if has_red then r = r + 0.1 end
-    if has_blue then b = b + 0.1 end
-    if has_yellow then r = r + 0.1; g = g + 0.1 end
-    if has_purple then r = r + 0.1; b = b + 0.1 end
-    if timer:TimerExists("power_green") then g = g + 0.1 end
-
-    inst.AnimState:SetAddColour(math.min(r, 0.3), math.min(g, 0.3), math.min(b, 0.3), 0)
 
     -- ==========================================
     -- 2. TEMPERATURE AND ENERGY SAVING
@@ -190,10 +174,10 @@ local function UpdateAuras(inst)
     end
 
     if has_red and is_winter and not timer:IsPaused("power_red") then
-        heat_amount = 100 * multiplier 
+        heat_amount = 70 * multiplier 
         is_heating = true
     elseif has_blue and is_summer and not timer:IsPaused("power_blue") then
-        heat_amount = -20 * multiplier
+        heat_amount = -30 * multiplier
         is_cooling = true
     end
 
@@ -316,6 +300,21 @@ local function GenerateSundrops(inst)
     end
 end
 
+-- =========================================================
+-- FORCE UI SYNC FOR CONTAINERS
+-- Fixes the visual desync bug where slot placeholders disappear
+-- =========================================================
+local function ForceContainerUISync(inst)
+    if inst.components.container ~= nil then
+        -- Tell every player currently looking inside to refresh their HUD
+        for opener, _ in pairs(inst.components.container.openlist) do
+            if opener ~= nil and opener:IsValid() then
+                opener:PushEvent("refreshinventory")
+            end
+        end
+    end
+end
+
 -- EVENT: Triggers instantly when an item is placed in the container
 local function OnItemGet(inst, data)
     local item = data ~= nil and data.item or nil
@@ -323,27 +322,23 @@ local function OnItemGet(inst, data)
 
     local gem_info = GEMS_DATA[item.prefab]
     if gem_info ~= nil then
-        -- Delay the consumption by exactly 1 tick (0 seconds)
-        -- This prevents the "ghost item" UI desync bug in DST containers
         inst:DoTaskInTime(0, function()
-            -- Double check the item is still there and the timer hasn't started
             if inst.components.container ~= nil and inst.components.container:Has(item.prefab, 1) then
                 if not inst.components.timer:TimerExists(gem_info.timer) then
                     
-                    -- Consume exactly 1 gem safely
                     inst.components.container:ConsumeByName(item.prefab, 1)
-                    
-                    -- Start the native timer
                     inst.components.timer:StartTimer(gem_info.timer, gem_info.duration)
                     inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
                     
-                    -- Handle exact transition for opal
                     if item.prefab == "opalpreciousgem" then
                         inst.AnimState:PlayAnimation("active_ini", false)
                         inst.AnimState:PushAnimation("active", true)
                     end
                     
                     UpdateAuras(inst)
+                    
+                    -- Push the UI update to restore ghost placeholders
+                    ForceContainerUISync(inst)
                 end
             end
         end)
@@ -356,15 +351,12 @@ local function OnTimerDone(inst, event_data)
             if event_data.name == data.timer then
                 
                 local container = inst.components.container
-                -- EVENT-DRIVEN AUTO-CONSUME: 
-                -- Check if we have another gem to immediately refresh the power
                 if container ~= nil and container:Has(gem_prefab, 1) then
                     
                     container:ConsumeByName(gem_prefab, 1)
                     inst.components.timer:StartTimer(data.timer, data.duration)
                     inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
                     
-                    -- Trigger exact visual transition for opal refresh
                     if gem_prefab == "opalpreciousgem" then
                         inst.AnimState:PlayAnimation("active_ini", false)
                         inst.AnimState:PushAnimation("active", true)
@@ -372,11 +364,11 @@ local function OnTimerDone(inst, event_data)
                     
                     UpdateAuras(inst)
                     
-                else
-                    -- No backup gem found, let the power die normally
-                    UpdateAuras(inst)
+                    -- Push the UI update to restore ghost placeholders
+                    ForceContainerUISync(inst)
                     
-                    -- Ensure it returns to standard visual state if the main power runs out
+                else
+                    UpdateAuras(inst)
                     if event_data.name == "power_opal" then
                         PlayCorrectIdle(inst)
                     end

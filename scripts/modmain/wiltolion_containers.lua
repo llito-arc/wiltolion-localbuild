@@ -117,7 +117,7 @@ for k, v in pairs(containers.params) do
 end
 
 -- ==========================================
--- EL HACK VISUAL: IMÁGENES FANTASMA NATIVAS
+-- THE VISUAL HACK: NATIVE GHOST IMAGES
 -- ==========================================
 AddClassPostConstruct("widgets/containerwidget", function(self)
     local old_Open = self.Open
@@ -133,7 +133,9 @@ AddClassPostConstruct("widgets/containerwidget", function(self)
                         slot.wiltolion_ghost = slot:AddChild(Image(atlas_name, tex_name))
                         slot.wiltolion_ghost:SetTint(1, 1, 1, 0.3) 
                         slot.wiltolion_ghost:SetClickable(false)   
-                        if slot.tile then
+                        
+                        -- Immediately check if the slot is occupied upon opening
+                        if slot.tile ~= nil then
                             slot.wiltolion_ghost:Hide()
                         end
                     end
@@ -163,6 +165,28 @@ AddClassPostConstruct("widgets/containerwidget", function(self)
                 local slot = self.inv[slot_num]
                 if slot and slot.wiltolion_ghost then
                     slot.wiltolion_ghost:Show()
+                end
+            end
+        end
+    end
+
+    -- ==========================================
+    -- THE MISSING LINK: BULLETPROOF UI SYNC
+    -- ==========================================
+    local old_Refresh = self.Refresh
+    if old_Refresh then
+        self.Refresh = function(self, ...)
+            old_Refresh(self, ...)
+            if self.isopen and self.container and self.container.prefab == "wiltolion_pylon" then
+                for i, slot in pairs(self.inv) do
+                    if slot.wiltolion_ghost then
+                        -- Strictly bind ghost visibility to the physical presence of an item tile
+                        if slot.tile ~= nil then
+                            slot.wiltolion_ghost:Hide()
+                        else
+                            slot.wiltolion_ghost:Show()
+                        end
+                    end
                 end
             end
         end
