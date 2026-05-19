@@ -255,6 +255,54 @@ local function UpdateThermalAndLight(inst)
         inst._heat_power = math.max(target_power, inst._heat_power - step)
     end
 
+    -- BLOCK B.5: MOISTURE EVAPORATION (THE TUG OF WAR)
+    if inst.components.moisture ~= nil then
+        
+        -- 1. ENVIRONMENTAL RAIN PENALTY (THE STORM DRAIN)
+        -- Heavy rain cools the core directly, mitigated by player's rain gear
+        if TheWorld.state.israining and inst._heat_power > 0 then
+            
+            -- GetWaterproofness() returns 0.0 (naked) to 1.0 (100% immune, Eyebrella)
+            local waterproof_mult = math.max(0, 1 - inst.components.moisture:GetWaterproofness())
+            
+            if waterproof_mult > 0 then
+                -- precipitationrate ranges from 0.0 (light drizzle) to 1.0 (heavy storm)
+                -- TUNING: At max storm with no umbrella, drain 4.5 heat per update
+                local rain_drain = TheWorld.state.precipitationrate * 4.5 * waterproof_mult
+                inst._heat_power = math.max(0, inst._heat_power - rain_drain)
+            end
+        end
+
+        -- 2. MOISTURE EVAPORATION (THE TUG OF WAR)
+        -- Evaporate any residual water that manages to touch the skin
+        local current_moisture = inst.components.moisture:GetMoisture()
+        
+        if current_moisture > 0 and inst._heat_power > 0 then
+            
+            -- TUNING: 1 point of Heat Power evaporates 1 point of Moisture
+            local conversion_rate = 1.0 
+            local max_evap_per_tick = 2.0 
+            
+            local possible_evap = inst._heat_power * conversion_rate
+            local actual_evap = math.min(current_moisture, possible_evap, max_evap_per_tick)
+            
+            if actual_evap > 0 then
+                local heat_cost = actual_evap / conversion_rate
+                
+                -- Drain heat power for the evaporation effort
+                inst._heat_power = math.max(0, inst._heat_power - heat_cost)
+                
+                -- Remove moisture cleanly via native API
+                inst.components.moisture:DoDelta(-actual_evap, true)
+                
+                -- Audio feedback (reduced chance to 10% to avoid audio spam during storms)
+                if math.random() < 0.1 then
+                    inst.SoundEmitter:PlaySound("dontstarve/common/fire_out", nil, 0.2)
+                end
+            end
+        end
+    end
+
     -- Enviamos el valor exacto al HUD
     inst._net_heat_power:set(math.floor(inst._heat_power))
 

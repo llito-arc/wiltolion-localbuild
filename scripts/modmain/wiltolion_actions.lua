@@ -190,47 +190,110 @@ AddModRPCHandler("Wiltolion", "TravelToPylon", function(player, origin_pylon, de
     end
 end)
 
--- ==========================================
--- MAGILUMINESCENCE RECHARGE (SUNDROP)
--- ==========================================
-local RECHARGE_AMULET = AddAction("RECHARGE_AMULET", "Recharge", function(act)
-    local amulet = act.target
+-- ===========================================================================
+-- SUNDROP RECHARGE SYSTEM (SOLAR EMPOWERMENT)
+-- ===========================================================================
+
+-- 1. CONFIGURATION TABLE
+local SUNDROP_TARGETS = {
+    yellowamulet    = { type = "fueled", amount = 0.10 }, -- Magiluminescence (50%)
+    nightstick      = { type = "fueled", amount = 0.05 }, -- Morning Star (50%)
+    minerhat        = { type = "fueled", amount = 0.10 }, -- Miner Hat (50%)
+    lantern         = { type = "fueled", amount = 0.15 }, -- Lantern (50%)
+    mushroom_light  = { type = "spore_container" },       -- Mushroom Light
+    mushroom_light2 = { type = "spore_container" },       -- Glowcap
+}
+
+-- 2. ACTION DEFINITION
+local RECHARGE_SOLAR = AddAction("RECHARGE_SOLAR", "Sundrop fuel", function(act)
+    local target = act.target
     local sundrop = act.invobject
     local doer = act.doer
     
-    if doer and not doer:HasTag("wiltolion_solar_5") then return false end
+    if doer == nil or not doer:HasTag("wiltolion_solar_5") then 
+        return false 
+    end
     
-    if amulet and amulet.components.fueled and sundrop then
-        if amulet.components.fueled:GetPercent() >= 1 then return false end
-        amulet.components.fueled:DoDelta(10)
+    if target == nil or sundrop == nil then 
+        return false 
+    end
+    
+    local data = SUNDROP_TARGETS[target.prefab]
+    if data == nil then 
+        return false 
+    end
+    
+    local success = false
+
+    -- [CASE A]: FUELED ITEMS
+    if data.type == "fueled" and target.components.fueled ~= nil then
+        if target.components.fueled:GetPercent() < 1 then
+            local fuel_to_add = target.components.fueled.maxfuel * data.amount
+            target.components.fueled:DoDelta(fuel_to_add)
+            success = true
+        end
         
-        if doer and doer.SoundEmitter then
+    -- [CASE B]: SPORE CONTAINERS (MUSHROOM LIGHTS)
+    elseif data.type == "spore_container" and target.components.container ~= nil then
+        if target.components.container:IsEmpty() then
+            local bulb = GLOBAL.SpawnPrefab("lightbulb")
+            if bulb ~= nil then
+                target.components.container:GiveItem(bulb)
+                success = true
+            end
+        else
+            for k, item in pairs(target.components.container.slots) do
+                if item and item.components.perishable ~= nil and item.components.perishable:GetPercent() < 1 then
+                    item.components.perishable:SetPercent(1)
+                    success = true
+                end
+            end
+        end
+    end
+    
+    -- 3. COMPLETE ACTION
+    if success then
+        if doer.SoundEmitter ~= nil then
             doer.SoundEmitter:PlaySound("dontstarve/common/minerhatAddFuel")
         end
         
-        if sundrop.components.stackable then
+        if sundrop.components.stackable ~= nil then
             sundrop.components.stackable:Get():Remove()
         else
             sundrop:Remove()
         end
         return true
     end
+    
     return false
 end)
-RECHARGE_AMULET.priority = 10 
+RECHARGE_SOLAR.priority = 10 
 
+-- 4. ACTION HANDLER (Client/Server prediction fix)
 AddComponentAction("USEITEM", "inventoryitem", function(inst, doer, target, actions, right)
-    if right and inst.prefab == "wiltolion_sundrop" and target.prefab == "yellowamulet" then
-        if doer:HasTag("wiltolion_solar_5") then
-            local is_full = false
-            if target.components.fueled then
-                is_full = target.components.fueled:GetPercent() >= 1
-            elseif target.replica.fueled then
-                is_full = target.replica.fueled:Percent() >= 1
+    if right and inst.prefab == "wiltolion_sundrop" then
+        
+        local data = SUNDROP_TARGETS[target.prefab]
+        
+        if doer:HasTag("wiltolion_solar_5") and data ~= nil then
+            local valid_target = false
+            
+            if GLOBAL.TheWorld.ismastersim then
+                -- SERVER SIDE: Strict validation using absolute component values.
+                if data.type == "fueled" and target.components.fueled ~= nil then
+                    valid_target = target.components.fueled:GetPercent() < 1
+                elseif data.type == "spore_container" and target.components.container ~= nil then
+                    valid_target = true
+                end
+            else
+                -- CLIENT SIDE: Permissive prediction.
+                -- Clients lack exact replica fuel values for inventory items. 
+                -- We allow the interaction prompt to appear and let the server handle validation.
+                valid_target = true
             end
             
-            if not is_full then
-                table.insert(actions, GLOBAL.ACTIONS.RECHARGE_AMULET)
+            if valid_target then
+                table.insert(actions, GLOBAL.ACTIONS.RECHARGE_SOLAR)
             end
         end
     end
@@ -469,8 +532,8 @@ end)
 -- ACTION HANDLERS
 AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.TRAVEL_PYLON, "doshortaction"))
 AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.TRAVEL_PYLON, "doshortaction"))
-AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.RECHARGE_AMULET, "doshortaction"))
-AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.RECHARGE_AMULET, "doshortaction"))
+AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.RECHARGE_SOLAR, "doshortaction"))
+AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.RECHARGE_SOLAR, "doshortaction"))
 
 -- ==========================================
 -- LUNAR ALIGNMENT: CALL TO ALTER
@@ -618,3 +681,32 @@ AddStategraphState("wilson", alter_call_server)
 AddStategraphState("wilson_client", alter_call_client)
 AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.ALTER_CALL, "wiltolion_alter_call"))
 AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.ALTER_CALL, "wiltolion_alter_call"))
+
+-- ===========================================================================
+-- OVERHEAT ANIMATION SUPPRESSION FOR WILTOLION
+-- ===========================================================================
+
+-- Intercepts the native idle_hot state directly inside the StateGraph
+local function SuppressWiltolionIdleHot(sg)
+    -- Store the original game function to not break other characters
+    local old_idle_hot_onenter = sg.states["idle_hot"].onenter
+    
+    sg.states["idle_hot"].onenter = function(inst, pushanim)
+        if inst:HasTag("wiltolion") then
+            -- Bypass the panting animation completely.
+            -- Playing the standard idle loop satisfies the StateGraph event queue
+            -- while visually keeping Wiltolion completely calm and majestic.
+            inst.AnimState:PlayAnimation("idle_loop", true)
+        else
+            -- If it's a normal character (like Wilson), run the standard hot animation
+            if old_idle_hot_onenter then
+                old_idle_hot_onenter(inst, pushanim)
+            end
+        end
+    end
+end
+
+-- Apply the injection to both the server and the client predictor
+-- This ensures the fix works perfectly across cave shards and high latency
+AddStategraphPostInit("wilson", SuppressWiltolionIdleHot)
+AddStategraphPostInit("wilson_client", SuppressWiltolionIdleHot)

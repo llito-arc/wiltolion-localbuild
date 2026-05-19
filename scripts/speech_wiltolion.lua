@@ -2081,7 +2081,7 @@ return {
 		BUZZARD = "A grumpy bald birdie!",
 
 		SHADOWDIGGER = "Oh no, Mr. Fancy-Suit brought a shadow-twin to play!",
-        SHADOWDANCER = "Some things you can never unsee...",
+        SHADOWDANCER = "I don't hate this one!",
 
 		CACTUS =
 		{
@@ -5325,21 +5325,21 @@ return {
         PUNCHINGBAG = "A bouncy hit-toy! Take that, invisible bully! Pow! Bam!",
 
         -- Rifts 2
-        SHADOWRIFT_PORTAL = "That drop looks like it goes on forever.",
+        SHADOWRIFT_PORTAL = "It's like the evil surface thing!",
 
-		SHADOW_FORGE = "What dark designs will it bring to life?",
-		SHADOW_FORGE_KIT = "It would be unscientific of me not to at least do some experiments.",
+		SHADOW_FORGE = "I dont want to make toys here...",
+		SHADOW_FORGE_KIT = "The bad thing is portable! That's not good!",
 
         FUSED_SHADELING = "I liked you better when you were smaller, and bothering someone else.",
         FUSED_SHADELING_BOMB = "Bombastic!",
 
 		VOIDCLOTH = "Those shadows are all cut from the same cloth.",
-		VOIDCLOTH_KIT = "My knowledge of sewing with shadows is patchy at best.",
-		VOIDCLOTHHAT = "It makes me feel dark and mysterious.",
-		ARMOR_VOIDCLOTH = "Oh drat, there's a tear across the front!",
+		VOIDCLOTH_KIT = "I hope I'll never have to use this scary thing!",
+		VOIDCLOTHHAT = "It's scary and I don't like it!",
+		ARMOR_VOIDCLOTH = "I don't like this one, it's too scary!",
 
         VOIDCLOTH_UMBRELLA = "I always hate when my hair gets melted by acid.",
-        VOIDCLOTH_SCYTHE = "It makes harvesting so easy, it's scary!",
+        VOIDCLOTH_SCYTHE = "It might be useful but I still don't like it!",
 
 		SHADOWTHRALL_HANDS = "Hands off!",
 		SHADOWTHRALL_HORNS = "It looks hungry for a fight.",
@@ -5656,7 +5656,7 @@ return {
         SHADOW_BEEF_BELL = "A spooky jingle-toy. I don't want to ring it.",
         SADDLE_SHADOW = "A bad-magic seat for the fuzzy monster. Yuck!",
         SHADOW_BATTLEAXE = "A scary shadow-chopper!",
-        VOIDCLOTH_BOOMERANG = "If I throw it, will the bad-magic come back to me?",
+        VOIDCLOTH_BOOMERANG = "If I throw it, will the bad-magic come back to me?!",
         ROPE_BRIDGE_KIT = "A bouncy string-path to walk on the water!",
         GELBLOB =
         {

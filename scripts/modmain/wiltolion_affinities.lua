@@ -27,6 +27,11 @@ local LUNAR_GEAR = {
     ["pickaxe_lunarplant"] = true, 
     ["shovel_lunarplant"] = true,  
     ["staff_lunarplant"] = true, 
+    ["armor_lunarplant"] = true,
+    ["lunarplanthat"] = true,
+    ["alterguardianhat"] = true,
+    ["alterguardianhatshard"] = true,
+    ["opalstaff"] = true,
 }
 
 -- ===========================================================================
@@ -34,21 +39,43 @@ local LUNAR_GEAR = {
 -- ===========================================================================
 
 -- 1. Shadow Fear (Passive sanity drain)
-local function ShadowFearSanityDrain(inst)
-    local extra_penalty = 0
+-- 1. Sanity Affinities (Shadow Fear & Lunar Comfort)
+local function WiltolionSanityAffinities(inst)
+    local extra_rate = 0
+    
     if inst.components.inventory then
         for slot, item in pairs(inst.components.inventory.equipslots) do
-            if item and SHADOW_EQUIPMENT[item.prefab] and item.components.equippable then
-                local dap = item.components.equippable.dapperness
-                if dap and dap < 0 then
-                    extra_penalty = extra_penalty + (dap * 2.0)
-                else
-                    extra_penalty = extra_penalty - (20 / 60)
+            if item and item.components.equippable then
+                
+                -- A) SHADOW FEAR (Penalty)
+                if SHADOW_EQUIPMENT[item.prefab] then
+                    local dap = item.components.equippable.dapperness
+                    if dap and dap < 0 then
+                        -- Multiplies existing negative sanity drain by 2x extra
+                        extra_rate = extra_rate + (dap * 2.0)
+                    else
+                        -- Flat penalty of -20 sanity per minute if it doesn't have native drain
+                        extra_rate = extra_rate - (20 / 60)
+                    end
                 end
+                
+                -- B) LUNAR COMFORT (Bonus)
+                if LUNAR_GEAR[item.prefab] then
+                    local dap = item.components.equippable.dapperness
+                    if dap and dap > 0 then
+                        -- Grants a 100% extra bonus if the item already provides positive sanity
+                        extra_rate = extra_rate + dap
+                    else
+                        -- Flat small comfort bonus (+1.8 sanity per minute) for neutral lunar tools
+                        extra_rate = extra_rate + (1.8 / 60)
+                    end
+                end
+
             end
         end
     end
-    return extra_penalty
+    
+    return extra_rate
 end
 
 -- 2. Staff Affinities (Injected into prefabs)
@@ -189,7 +216,8 @@ AddPlayerPostInit(function(inst)
         inst:ListenForEvent("finishedwork", OnFinishedWork)
 
         if inst.components.sanity then
-            inst.components.sanity.custom_rate_fn = ShadowFearSanityDrain
+            -- Updated to use the new dual-affinity function
+            inst.components.sanity.custom_rate_fn = WiltolionSanityAffinities
         end
     end
 end)

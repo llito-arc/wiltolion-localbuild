@@ -73,7 +73,7 @@ local function BuildSkillsData(SkillTreeFns)
         { title = "Shiny Hunt",          desc = "Wiltolion just *has* to double-check every stone... what if one sparkles back?", icon = "skilltree3",},
         { title = "Sunfly buddies",      desc = "Learn how to call tiny Sunfly buddies to flutter by your side.", icon = "skilltree4",},
         { title = "Echo Wilto",          desc = "Summon a cheeky echo of Wilto to lend a friendly hand.", icon = "skilltree5", },
-        { title = "Sunny drops",         desc = "Use Sundrops as fuel to magiluminescence.", icon = "skilltree6", },
+        { title = "Sunny drops",         desc = "Use Sundrops to fuel a bunch of items.", icon = "skilltree6", },
         { title = "Sparkly Crafting",    desc = "Discover fun new ways to tinker with Opal and Yellow Staves.", icon = "skilltree7",},
         { title = "Shimmer Tricks",      desc = "Wands feel lighter, brighter, and a bit more magical to use.", icon = "skilltree8",},
         { title = "Sunny Crown",         desc = "Learn to make your own space-donut!", icon = "skilltree9",},
