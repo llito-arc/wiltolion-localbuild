@@ -5,11 +5,10 @@ local TECH = GLOBAL.TECH
 AddRecipe2(
     "wiltolion_torus",
     { 
-        Ingredient("thulecite", 3), 
+        Ingredient("thulecite", 2), 
         Ingredient("yellowgem", 3),
-        Ingredient("greengem", 1),
-        Ingredient("goldnugget", 10),
-        Ingredient("wiltolion_sundrop", 200), 
+        Ingredient("goldnugget", 5),
+        Ingredient("wiltolion_sundrop", 100), 
     },
     TECH.MAGIC_THREE,
     {
@@ -168,10 +167,9 @@ AddRecipe2("wiltolion_thingy",
     GLOBAL.TECH.NONE, 
     {
         builder_tag = "wiltolion_constel_4", 
-        nounlock = true,
         -- Use the atlas and image you want to show in the crafting menu
         atlas = "images/inventoryimages/wiltolion_thingy.xml",
         image = "wiltolion_thingy.tex",
     },
-    {"CHARACTER", "MAGIC"}
+    {"CHARACTER","MAGIC"}
 )

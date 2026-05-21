@@ -616,14 +616,14 @@ return {
     ANNOUNCE_ENCUMBERED =
     {
         "Huff... Pant...",
-        "I should have built... a lifting machine...",
-        "Lift... with your back...",
-        "This isn't... gentleman's work...",
-        "For... science... oof!",
-        "Is this... messing up my hair?",
+        "Come on star powers...!",
+        "My star back hurts...!",
+        "This isn't... sunlion's work...",
+        "For... the stars... oof!",
+        "Is this... messing up my mane?",
         "Hngh...!",
         "Pant... Pant...",
-        "This is the worst... experiment...",
+        "my... paws are too small for this...",
     },
     ANNOUNCE_ATRIUM_DESTABILIZING =
     {
@@ -1245,7 +1245,7 @@ return {
         SANDSPIKE = "Yikes! A giant sand-tooth almost poked my tummy!",
         SANDBLOCK = "It's like a big block of itchy sand-sparkles.",
         GLASSSPIKE = "Now it's a shiny spike! Still no poking allowed!",
-        GLASSBLOCK = "Science-magic turned the sand into a clear toy-block!",
+        GLASSBLOCK = "magic turned the sand into a clear toy-block!",
         ABIGAIL_FLOWER =
         {
             GENERIC ="A ghosty flower! It smells like starlight and cold hugs.",
@@ -1300,7 +1300,7 @@ return {
         BOOK_TEMPERATURE = "This magic book changes from freezing cold to hot and sweaty!",
         BOOK_LIGHT = "A glowing story filled with captured sun-sparks!",
         BOOK_RAIN = "If I read this out loud, the sky-juice starts pouring down! Splash!",
-        BOOK_MOON = "A beautiful story about the giant night-cheese and its sparkly magic.",
+        BOOK_MOON = "A beautiful story about the giant night-friend and its sparkly magic.",
         BOOK_BEES = "A tickly book about the buzzy-bugs making sticky sweet-stuff!",
         
         BOOK_HORTICULTURE_UPGRADED = "Super-duper magic doodles! The green-friends are going to be giant!",
@@ -1618,7 +1618,7 @@ return {
 		},
         WETPAPER = "A soggy doodle-page. It needs to dry off!",
         WETPOUCH = "A soggy pocket-bag. It's falling all apart!",
-        MOONROCK_PIECES = "Chunks of the big night-cheese! I can pounce on these.",
+        MOONROCK_PIECES = "Chunks of the big night-friend! I can pounce on these.",
         MOONBASE =
         {
             GENERIC = "A night-cradle! It's waiting for a magic-stick.",
@@ -1629,10 +1629,10 @@ return {
         },
         MOONDIAL =
         {
-			GENERIC = "A bowl of water that talks to the big night-cheese.",
+			GENERIC = "A bowl of water that talks to the big night-friend.",
 			NIGHT_NEW = "The night-friend is hiding today.",
 			NIGHT_WAX = "The night-friend is getting bigger and brighter!",
-			NIGHT_FULL = "Look! The big night-cheese is all grown up!",
+			NIGHT_FULL = "Look! The big night-friend is all grown up!",
 			NIGHT_WANE = "The night-friend is getting sleepy and small again.",
 			CAVE = "I can't see the night-friend in this spooky hole.",
 			WEREBEAVER = "only_used_by_woodie", --woodie specific
@@ -1675,7 +1675,7 @@ return {
 		YELLOWSTAFF = "A genius toy! A shiny sun-gem on a stick!",
 		YELLOWGEM = "A bright yellow space-candy! I really like this one!",
 		ORANGEGEM = "An orange star-rock!",
-        OPALSTAFF = "Science-magic says gems look better on top of bonk-sticks!",
+        OPALSTAFF = "Magic says gems look better on top of bonk-sticks!",
         OPALPRECIOUSGEM = "This gem is extra-special! It's got a big glow.",
         TELEBASE =
 		{
@@ -1825,7 +1825,7 @@ return {
         TURF_FOREST = "A piece of the leaf-playground.",
         TURF_GRASS = "Soft tickle-grass.",
         TURF_MARSH = "Soggy squishy mud.",
-        TURF_METEOR = "A piece of the big night-cheese!",
+        TURF_METEOR = "A piece of the big night-friend!",
         TURF_PEBBLEBEACH = "Little rocks for skipping!",
         TURF_ROAD = "A zoomy-path!",
         TURF_ROCKY = "Hard bumpy ground.",
@@ -2162,7 +2162,7 @@ return {
 		CHESSPIECE_MINOTAUR = "Now you're the one scared stiff!",
         CHESSPIECE_BUTTERFLY = "A giant stone flappy-friend!",
         CHESSPIECE_ANCHOR = "A giant heavy sinky-hook!",
-        CHESSPIECE_MOON = "It's a piece of the night-cheese in a fancy shape!",
+        CHESSPIECE_MOON = "It's a piece of the night-friend in a fancy shape!",
         CHESSPIECE_CARRAT = "We have a winner!",
         CHESSPIECE_MALBATROSS = "It's not so bad when it isn't trying to kill you.",
         CHESSPIECE_CRABKING = "Still not as crabby as Maxwell.",
@@ -2322,10 +2322,10 @@ return {
 		},
 		LAVAE_TOOTH = "A teeny-tiny fire-tooth!",
 
-		DRAGONFRUIT = "A red bumpy-snack! So pretty!",
-		DRAGONFRUIT_COOKED = "A warm red bumpy-snack!",
+		DRAGONFRUIT = "red bumpy-snack! So pretty!",
+		DRAGONFRUIT_COOKED = "warm red bumpy-snack!",
 		DRAGONFRUIT_SEEDS = "Little magic seeds for growing pink snacks.",
-		DRAGONPIE = "A delicious red dragon-pie! My favorite!",
+		DRAGONPIE = "Delicious red dragon-pie!",
 		DRUMSTICK = "A flappy-friend's leg! Looks like a good chew-toy.",
 		DRUMSTICK_COOKED = "A warm, yummy chew-toy snack!",
 		DUG_BERRYBUSH = "A sleepy snack-plant. I can carry it to my base!",
@@ -3347,7 +3347,7 @@ return {
 			BURNT = "A crispy burned wall.",
 		},
 		WALL_WOOD_ITEM = "Pointy pickets for building!",
-		WALL_MOONROCK = "A sparkly night-cheese wall!",
+		WALL_MOONROCK = "A sparkly night-friend wall!",
 		WALL_MOONROCK_ITEM = "Pieces of the night-friend for building!",
 		WALL_DREADSTONE = "I feel so... safe?",
 		WALL_DREADSTONE_ITEM = "What could go wrong?",
@@ -3890,10 +3890,10 @@ return {
 
         MOON_TREE =
         {
-            BURNING = "The night-cheese tree is burning!",
+            BURNING = "The night-friend tree is burning!",
             BURNT = "A crispy night-stick.",
             CHOPPED = "Yay, night-blocks!",
-            GENERIC = "A tree from the big night-cheese!",
+            GENERIC = "A tree from the big night-friend!",
         },
         MOON_TREE_BLOSSOM = "A pretty little night-petal!",
 
@@ -5204,7 +5204,7 @@ return {
         PIRATE_STASH = "A secret toy-box hidden in the dirt!",
         STASH_MAP = "A doodle-map to find hidden treasure!",
 
-        BANANAJUICE = "Sweet yellow splash-juice! So yummy!",
+        BANANAJUICE = "Sweet yellow splash-juice! Super-duper yummy!",
 
         FENCE_ROTATOR = "A clicky-turner for the stick-fences.",
 
@@ -5802,7 +5802,7 @@ return {
         WAGDRONE_PARTS = "Broken bits of a beep-boop toy.",
         WAGDRONE_BEACON = "A shiny stick that talks to the beep-boops.",
 
-        WAGPUNK_WORKSTATION = "A messy desk for making science toys!",
+        WAGPUNK_WORKSTATION = "A messy desk for making new toys!",
         WAGPUNK_LEVER = "A big clicky handle! Can I pull it?",
         WAGPUNK_FLOOR_KIT = "Metal floor puzzles!",
         WAGPUNK_CAGEWALL = "A metal fence to keep things inside.",

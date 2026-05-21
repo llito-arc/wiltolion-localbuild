@@ -7,6 +7,7 @@ PrefabFiles = {
     "wiltolion",
     "wiltolion_none",
     "wiltolion_torus", -- Necesario para que el compendio reconozca el ítem
+    "wilto_journal",
 }
 
 -- =========================================================
@@ -72,14 +73,14 @@ end
 _G.STRINGS.CHARACTER_BIOS.wiltolion = {
     { 
         title = "Birthday", 
-        desc = "december 12" -- ¡Pon el cumpleaños que prefieras!
+        desc = "september 12" 
     },
     { 
         title = "Favorite Food", 
-        desc = "Wiltolion likes any yummy things, but Dragonpie makes his mane shine extra bright!" -- O la comida que elijas
+        desc = "Wiltolion likes any yummy things, but bananajuices makes his mane shine extra bright!" -- O la comida que elijas
     },
     { 
-        title = "Cosmos", -- O puedes llamarlo "Possessions", "History", etc.
+        title = "Cosmos", 
         desc = "Wiltolion claims he came from somewhere beyond the cosmic event horizon, a distant, silent region at the farthest edges of the universe, where light itself struggles to return.\nNo astronomer has ever observed such a place.\nNo telescope has ever reached that far.\nAnd yet, Wiltolion speaks of it as if it were home."
     }
 }
@@ -96,7 +97,7 @@ if _G.TUNING.GAMEMODE_STARTING_ITEMS.DEFAULT == nil then
 end
 _G.TUNING.GAMEMODE_STARTING_ITEMS.DEFAULT.WILTOLION = {
     "wiltolion_torus",
-    "yellowstaff",
+    "wilto_journal",
 }
 
 -- Decirle al menú dónde encontrar la imagen de tu ítem customizado
@@ -106,6 +107,10 @@ end
 _G.TUNING.STARTING_ITEM_IMAGE_OVERRIDE.wiltolion_torus = {
     atlas = "images/inventoryimages/wiltolion_torus.xml",
     image = "wiltolion_torus.tex",
+}
+_G.TUNING.STARTING_ITEM_IMAGE_OVERRIDE.wilto_journal = {
+    atlas = "images/inventoryimages/wilto_journal.xml",
+    image = "wilto_journal.tex",
 }
 
 -- =========================================================

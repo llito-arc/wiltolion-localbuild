@@ -79,6 +79,7 @@ local function WiltolionSanityAffinities(inst)
 end
 
 -- 2. Staff Affinities (Injected into prefabs)
+-- 2. Staff Affinities (Injected into prefabs)
 local function InjectStaffAffinities(inst)
     if not GLOBAL.TheWorld.ismastersim then return end
     
@@ -99,30 +100,61 @@ local function InjectStaffAffinities(inst)
         end
     end
 
-    -- B) Modify sanity cost (For casting staves)
-    if mods.sanity_mult and inst.components.spellcaster then
-        local old_CanCast = inst.components.spellcaster.CanCast
-        if old_CanCast then
-            inst.components.spellcaster.CanCast = function(self, doer, target, pos)
-                local original_cost = self.sanitycost or 0 
-                if doer and doer:HasTag("wiltolion") and doer:HasTag("wiltolion_solar_7") then
-                    self.sanitycost = original_cost * mods.sanity_mult
+    -- B) Modify sanity cost (For casting staves & blink staves)
+    if mods.sanity_mult then
+        -- Standard casting staves (Yellow, Green, Teleport, etc.)
+        if inst.components.spellcaster then
+            local old_CanCast = inst.components.spellcaster.CanCast
+            if old_CanCast then
+                inst.components.spellcaster.CanCast = function(self, doer, target, pos)
+                    local original_cost = self.sanitycost or 0 
+                    if doer and doer:HasTag("wiltolion") and doer:HasTag("wiltolion_solar_7") then
+                        self.sanitycost = original_cost * mods.sanity_mult
+                    end
+                    local can_cast = old_CanCast(self, doer, target, pos)
+                    self.sanitycost = original_cost
+                    return can_cast
                 end
-                local can_cast = old_CanCast(self, doer, target, pos)
-                self.sanitycost = original_cost
-                return can_cast
             end
-        end
 
-        local old_CastSpell = inst.components.spellcaster.CastSpell
-        if old_CastSpell then
-            inst.components.spellcaster.CastSpell = function(self, doer, target, pos)
-                local original_cost = self.sanitycost or 0 
-                if doer and doer:HasTag("wiltolion") and doer:HasTag("wiltolion_solar_7") then
-                    self.sanitycost = original_cost * mods.sanity_mult
+            local old_CastSpell = inst.components.spellcaster.CastSpell
+            if old_CastSpell then
+                inst.components.spellcaster.CastSpell = function(self, doer, target, pos)
+                    local original_cost = self.sanitycost or 0 
+                    if doer and doer:HasTag("wiltolion") and doer:HasTag("wiltolion_solar_7") then
+                        self.sanitycost = original_cost * mods.sanity_mult
+                    end
+                    old_CastSpell(self, doer, target, pos)
+                    self.sanitycost = original_cost
                 end
-                old_CastSpell(self, doer, target, pos)
-                self.sanitycost = original_cost
+            end
+            
+            -- FIX: Add blinkstaff component support for the orangestaff (Lazy Explorer)
+        elseif inst.components.blinkstaff then
+            local old_onblinkfn = inst.components.blinkstaff.onblinkfn
+            if old_onblinkfn then
+                inst.components.blinkstaff.onblinkfn = function(staff, pos, caster)
+                    -- 1. Snapshot the sanity before the blink
+                    local pre_sanity = caster and caster.components.sanity and caster.components.sanity.current or 0
+                    
+                    -- 2. Execute the native Klei blink logic (which will subtract the hardcoded 15 sanity)
+                    old_onblinkfn(staff, pos, caster)
+                    
+                    -- 3. Calculate the damage done and refund the difference seamlessly
+                    if caster and caster:HasTag("wiltolion") and caster:HasTag("wiltolion_solar_7") and caster.components.sanity then
+                        local post_sanity = caster.components.sanity.current
+                        local sanity_lost = pre_sanity - post_sanity
+                        
+                        if sanity_lost > 0 then
+                            -- E.g., if sanity_mult is 0.5, we must refund 50% of what was lost (1 - 0.5 = 0.5)
+                            local refund = sanity_lost * (1 - mods.sanity_mult)
+                            
+                            -- Pass 'true' as the second argument (overtime) so the sanity pop-up UI 
+                            -- doesn't flash twice violently on the client's screen.
+                            caster.components.sanity:DoDelta(refund, true)
+                        end
+                    end
+                end
             end
         end
     end
@@ -210,7 +242,7 @@ AddPlayerPostInit(function(inst)
     
     if inst:HasTag("wiltolion") then
         if inst.components.foodaffinity then
-            inst.components.foodaffinity:AddPrefabAffinity("dragonpie", GLOBAL.TUNING.AFFINITY_15_CALORIES_HUGE)
+            inst.components.foodaffinity:AddPrefabAffinity("bananajuice", GLOBAL.TUNING.AFFINITY_15_CALORIES_HUGE)
         end
 
         inst:ListenForEvent("finishedwork", OnFinishedWork)

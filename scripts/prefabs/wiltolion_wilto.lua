@@ -91,9 +91,20 @@ local function ProcessHealingItems(inst)
             break
         end
     end
+
+    local HEAL_GATHER_LINES = {
+        "I'm saving this to patch you up!",
+        "This will make a fine bandage later!",
+        "More medical supplies for the road.",
+        "Keep them coming, I'll keep us alive!",
+        "Stored! Let me know if you need first aid.",
+        "Perfect. I'll convert this into healing materials!"
+    }
     
     if points_gained_this_tick > 0 and inst.components.talker then
-        inst.components.talker:Say("I'm saving this to patch you up!")
+        -- Klei's native global utility to safely pick a random element from a flat array
+        local chosen_line = GetRandomItem(HEAL_GATHER_LINES)
+        inst.components.talker:Say(chosen_line)
     end
 end
 -- =========================================================
@@ -119,10 +130,22 @@ local function ShouldFleeForSurvival(inst)
     -- UMBRALES DE PÁNICO:
     -- Si tiene armadura, aguanta hasta el 15% de vida.
     -- Si no tiene armadura, entra en pánico al 30% de vida.
+    local COMPLAINT_LINES = {
+        "I can't take much more of this!",
+        "Fall back! I cannot survive another hit!",
+        "I'm hurt out here...!",
+        "Getting out of here...!",
+        "No, no, no!",
+        "I need to patch up immediately! Cover me!",
+        "My vision is fading...!"
+    }
+
     if (has_armor and hp_percent <= 0.15) or (not has_armor and hp_percent <= 0.30) then
         -- Opcional: Que pida ayuda
         if inst.components.talker and math.random() < 0.05 then
-            inst.components.talker:Say("I can't take much more of this!")
+            -- Klei's native global utility to safely pick a random line from the array
+            local chosen_line = GetRandomItem(COMPLAINT_LINES)
+            inst.components.talker:Say(chosen_line)
         end
         return true
     end
@@ -278,7 +301,13 @@ local function wiltofn()
     inst.AnimState:SetBank("wilson")
     inst.AnimState:SetBuild("wilto") 
     inst.AnimState:PlayAnimation("idle_loop", true)
-    inst.AnimState:AddOverrideBuild("wurt_peruse")
+    --inst.AnimState:AddOverrideBuild("wurt_peruse")
+    --inst.AnimState:AddOverrideBuild("player_basic")     -- Core human animations
+    --inst.AnimState:AddOverrideBuild("player_idles")     -- Idle animations (contains yawn)
+    --inst.AnimState:AddOverrideBuild("player_actions")   -- Action animations (contains wave)
+    inst.AnimState:AddOverrideBuild("player_emotes")    -- Standard emotes
+    inst.AnimState:AddOverrideBuild("player_emotesxl")  -- Extra large emotes (contains happycheer)
+    inst.AnimState:AddOverrideBuild("emote_laugh")
 
     inst.AnimState:Hide("ARM_carry")
     inst.AnimState:Hide("HAT")
@@ -289,7 +318,7 @@ local function wiltofn()
     inst:AddTag("alltrader") 
     inst:AddTag("wilto_companion") -- Etiqueta para reconocerlo al hacer click
     inst:AddTag("companion") 
-    inst:AddTag("NOBLOCK")
+    inst:AddTag("NOBLOCK") 
     
     -- MEMORIA BASE
     inst.wilto_toggles = { pickup = true, chop = true, mine = true, dig = true, fight = true, give = true, harvest = true }
@@ -397,23 +426,46 @@ local function wiltofn()
     inst:AddComponent("inventory")
     inst.components.inventory.maxslots = 35
 
+    -- =========================================================
+    -- TRADER COMPONENT SETUP (ITEM TRADING SYSTEM)
+    -- =========================================================
     inst:AddComponent("trader")
-    inst.components.trader.acceptnontradable = true -- ¡LA LÍNEA MÁGICA DE WX!
-    inst.components.trader.deleteitemonaccept = false
+    inst.components.trader.acceptnontradable = true -- WX-78's magic line! Accepts non-tradable items.
+    inst.components.trader.deleteitemonaccept = false -- Keeps the item so it can be handled or stored.
+    
     inst.components.trader:SetAcceptTest(function(inst, item, giver)
-        -- Evita objetos que rompen el juego (como el Chester Bone o el Star-sky)
+        -- Prevent items that break the game logic (like Chester's Eye Bone or Star-sky)
         if item.components.inventoryitem and item.components.inventoryitem.cangoincontainer == false then
             return false
         end
-        -- Al devolver 'true', Wilto aceptará CUALQUIER objeto que le des en mano
+        -- Return true allows Wilto to accept ANY valid item given by hand
         return true
     end)
+
+    -- Declared inside the scope but outside the callback to prevent memory allocations per trade
+    local ITEM_RECEIVED_LINES = {
+        "I'll put this to good use...!",
+        "Thank you! I'll hold onto this for now.",
+        "Appreciate it! This will definitely come in handy!",
+        "For me? Thanks...!",
+        "Alright, let's see what we can do with this...",
+        "Safe with me! Thanks for the gear.",
+        "This looks useful. I'll make sure it doesn't go to waste!"
+    }
+
+    -- FIX: Encapsulate the dialogue logic inside the native component callback.
+    -- This function triggers automatically EVERY TIME an item is successfully traded.
+    -- FIX: Encapsulate the dialogue logic inside the native component callback.
     inst.components.trader.onaccept = function(inst, giver, item)
         if inst.components.talker then
-            inst.components.talker:Say("I'll put this to good use...!")
+            local chosen_line = GetRandomItem(ITEM_RECEIVED_LINES)
+            inst.components.talker:Say(chosen_line)
         end
-        -- Nota: No forzamos el equipamiento aquí porque tu evento "gotnewitem" 
-        -- más abajo ya hace un trabajo perfecto organizando el inventario.
+
+        -- REMOVED: inst.components.inventory:GiveItem(item)
+        -- The native 'trader' component already handles the inventory transfer 
+        -- automatically because deleteitemonaccept is false. 
+        -- Forcing it a second time causes stackable items to paradox-merge and crash.
     end
 
     inst:AddComponent("inspectable")

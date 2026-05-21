@@ -15,10 +15,6 @@ local WiltolionWiltoBrain = Class(Brain, function(self, inst)
     Brain._ctor(self, inst)
 end)
 
-local MIN_FOLLOW_DIST = 0
-local TARGET_FOLLOW_DIST = 6
-local MAX_FOLLOW_DIST = 8
-
 local START_FACE_DIST = 4
 local KEEP_FACE_DIST = 8
 
@@ -46,6 +42,21 @@ end
 
 local function KeepFaceLeaderFn(inst, target)
     return target.entity:IsVisible() and inst:IsNear(target, KEEP_FACE_DIST)
+end
+
+-- =========================================================
+-- WATCHDOG BLACKLIST HELPER
+-- =========================================================
+local function IsEntityBlacklisted(inst, target)
+    if inst._blacklisted_items ~= nil and inst._blacklisted_items[target] ~= nil then
+        if inst._blacklisted_items[target] > GetTime() then
+            return true
+        else
+            -- Garbage collection: clean up expired memory
+            inst._blacklisted_items[target] = nil
+        end
+    end
+    return false
 end
 
 -- =========================================================
@@ -83,8 +94,9 @@ local function FilterAnyWorkableTargets(targets, inst)
     local toggles = inst.wilto_toggles or {}
     
     for _, sometarget in ipairs(targets) do
-        -- Blindaje anticolisiones (Evita que mire árboles cayendo)
-        if sometarget ~= nil and sometarget:IsValid() and sometarget.components.workable ~= nil and sometarget.components.workable:CanBeWorked() then
+        -- FIX: Injected IsEntityBlacklisted to prevent infinite lock-loops
+        if sometarget ~= nil and sometarget:IsValid() and not IsEntityBlacklisted(inst, sometarget) 
+           and sometarget.components.workable ~= nil and sometarget.components.workable:CanBeWorked() then
             
             if sometarget.components.burnable == nil or (not sometarget.components.burnable:IsBurning() and not sometarget.components.burnable:IsSmoldering()) then
                 
@@ -123,41 +135,61 @@ local function FilterAnyWorkableTargets(targets, inst)
 end
 
 -- =========================================================
--- WORK ROUTINES - PERFORMANCE FIX FOR THE "BLIND ROOMBA"
+-- WORK ROUTINES - REFACTORED
 -- =========================================================
 local function FindAnyEntityToWorkActionsOn(inst)
-    if inst.sg:HasStateTag("busy") then return nil end
     local leader = GetLeader(inst)
     if leader == nil then return nil end
 
-    -- PERFORMANCE FIX: Throttle the massive 25-radius double scan!
+    -- 1. CACHE SYSTEM: Fast bypass to maintain work actions smoothly
+    if inst._work_target ~= nil then
+        if inst._work_target:IsValid() and inst._work_target.components.workable ~= nil and inst._work_target.components.workable:CanBeWorked() then
+            
+            -- SAFEGUARD: Check if the watchdog recently blacklisted this exact cached target
+            if inst._blacklisted_items and inst._blacklisted_items[inst._work_target] and inst._blacklisted_items[inst._work_target] > GetTime() then
+                inst._work_target = nil
+            else
+                local action, tool = PickValidActionFrom(inst._work_target, inst)
+                if action ~= nil then
+                    return BufferedAction(inst, inst._work_target, action, tool)
+                else
+                    -- FIX: Target is valid, but the tool broke or the player toggled the action off.
+                    -- We MUST clear the cache immediately to prevent an infinite null-loop freeze.
+                    inst._work_target = nil
+                end
+            end
+        else
+            inst._work_target = nil
+        end
+    end
+
+    -- 2. THROTTLING SYSTEM: Only scan when the timer allows it
     local t = GetTime()
     if inst._next_work_scan ~= nil and t < inst._next_work_scan then
         return nil
     end
-    -- If nothing is found, wait 3.0 seconds before punishing the CPU again
-    inst._next_work_scan = t + 3.0
+
+    -- Apply a 2.0 second penalty if no target is found to protect server CPU
+    inst._next_work_scan = t + 2.0
 
     local x, y, z = inst.Transform:GetWorldPosition()
     
-    -- 1. Scan 25 units around Wilto
+    -- Scan around Wilto first
     local target = FilterAnyWorkableTargets(TheSim:FindEntities(x, y, z, 25, nil, TOWORK_CANT_TAGS, ANY_TOWORK_MUSTONE_TAGS), inst)
     
-    -- 2. Scan 25 units around Leader
+    -- Scan around Leader if nothing found
     if target == nil then
         local lx, ly, lz = leader.Transform:GetWorldPosition()
         target = FilterAnyWorkableTargets(TheSim:FindEntities(lx, ly, lz, 25, nil, TOWORK_CANT_TAGS, ANY_TOWORK_MUSTONE_TAGS), inst)
     end
     
-    local action, tool = nil, nil
     if target ~= nil then
-        action, tool = PickValidActionFrom(target, inst)
-    end
-    
-    if action ~= nil then
-        -- Clear the timer so he can continue working fluidly without delays
-        inst._next_work_scan = nil
-        return BufferedAction(inst, target, action, tool)
+        local action, tool = PickValidActionFrom(target, inst)
+        if action ~= nil then
+            inst._work_target = target -- Save target into cache
+            inst._next_work_scan = nil -- Clear scan penalty so he works fluidly
+            return BufferedAction(inst, target, action, tool)
+        end
     end
     
     return nil
@@ -180,8 +212,6 @@ end
 -- AUTO-SORTING SYSTEM - FULLY OPTIMIZED (THROTTLED)
 -- =========================================================
 local function FindChestToStoreItem(inst)
-    if inst.sg:HasStateTag("busy") then return nil end
-    
     if inst.wilto_toggles ~= nil and (inst.wilto_toggles.pickup == false or inst.wilto_toggles.give == false) then
         return nil
     end
@@ -213,7 +243,7 @@ local function FindChestToStoreItem(inst)
                 local inv_item = container_ent.components.inventoryitem
                 local is_held = inv_item ~= nil and inv_item.owner ~= nil
                 
-                if cont ~= nil and not is_held and cont:IsOpen() == false then
+                if cont ~= nil and not is_held and cont:IsOpen() == false and not IsEntityBlacklisted(inst, container_ent) then
                     
                     if cont:Has(item.prefab, 1) then
                         local can_store = false
@@ -247,15 +277,30 @@ local function FindChestToStoreItem(inst)
 end
 
 -- =========================================================
--- RESOURCE GATHERING (Original logic + Anti-stuck Blacklist)
+-- RESOURCE GATHERING - REFACTORED
 -- =========================================================
 local function FindResourceToPickup(inst)
-    if inst.sg:HasStateTag("busy") then return nil end
-    
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.pickup == false then 
         return nil 
     end
 
+    if inst.components.inventory and inst.components.inventory:IsFull() then
+        return nil
+    end
+
+    -- 1. CACHE SYSTEM: Persist the target until it is held or destroyed
+    if inst._pickup_target ~= nil then
+        if inst._pickup_target:IsValid() and 
+           inst._pickup_target.components.inventoryitem ~= nil and 
+           inst._pickup_target.components.inventoryitem.canbepickedup and 
+           not inst._pickup_target.components.inventoryitem:IsHeld() then
+            return BufferedAction(inst, inst._pickup_target, ACTIONS.PICKUP)
+        else
+            inst._pickup_target = nil -- Clears cache once successfully picked up
+        end
+    end
+
+    -- 2. THROTTLING SYSTEM
     local t = GetTime()
     if inst._next_pickup_scan ~= nil and t < inst._next_pickup_scan then
         return nil
@@ -263,51 +308,32 @@ local function FindResourceToPickup(inst)
     inst._next_pickup_scan = t + 1.0
 
     local leader = GetLeader(inst)
-    if not leader then return nil end
-
-    if inst.components.inventory and inst.components.inventory:IsFull() then
-        return nil
-    end
+    if leader == nil then return nil end
 
     local x, y, z = inst.Transform:GetWorldPosition()
-    
-    -- Engine-level tag filtering (faster than checking inside the Lua loop)
-    local NO_TAGS = { 
-        "INLIMBO", "NOCLICK", "catchable", "fire", 
-        "irreplaceable", "nosteal", "heavy", "backpack" 
-    }
-    
+    local NO_TAGS = { "INLIMBO", "NOCLICK", "catchable", "fire", "irreplaceable", "nosteal", "heavy", "backpack" }
     local ents = TheSim:FindEntities(x, y, z, 15, { "_inventoryitem" }, NO_TAGS)
 
-    -- Ensure blacklist table exists
     if inst._blacklisted_items == nil then 
         inst._blacklisted_items = {} 
     end
 
-    -- Get the leader's ignore list
     local ignorethese = leader._brain_pickup_ignorethese or {}
 
-    for i, item in ipairs(ents) do
-        local is_blacklisted = false
-        if inst._blacklisted_items[item] ~= nil then
-            if t < inst._blacklisted_items[item] then
-                is_blacklisted = true
-            else
-                inst._blacklisted_items[item] = nil -- Remove expired item
-            end
-        end
+    for _, item in ipairs(ents) do
+        local is_blacklisted = inst._blacklisted_items[item] ~= nil and t < inst._blacklisted_items[item]
         
-        if item:IsValid() and 
-           not is_blacklisted and 
-           not ignorethese[item] and -- Respect leader's ignored items
-           item.components.inventoryitem and 
+        if not is_blacklisted and item:IsValid() and 
+           not ignorethese[item] and 
+           item.components.inventoryitem ~= nil and 
            item.components.inventoryitem.canbepickedup and 
            not item.components.inventoryitem:IsHeld() and
-           item.components.container == nil and -- Strictly avoid picking up anything with a container
+           item.components.container == nil and 
            item:IsOnValidGround() and
            not item:HasTag("trap") and 
            item:GetDistanceSqToInst(leader) < 400 then
             
+            inst._pickup_target = item -- Store target in cache
             inst._next_pickup_scan = nil 
             return BufferedAction(inst, item, ACTIONS.PICKUP)
         end
@@ -358,7 +384,6 @@ end
 
 -- 3. LA FUNCIÓN DE DAR (Actualizada para usar el nuevo escáner)
 local function GiveResourcesToLeader(inst)
-    if inst.sg:HasStateTag("busy") then return nil end
     -- NUEVO: Comprueba el botón
     if inst.wilto_toggles ~= nil and not inst.wilto_toggles.give then return nil end
     local leader = GetLeader(inst)
@@ -444,9 +469,11 @@ local function FindPlantToPick(inst)
     local ents = TheSim:FindEntities(px, py, pz, 15, nil, PICK_CANT_TAGS)
 
     for _, target in ipairs(ents) do
-        -- Comprobación a prueba de fallos y validación de componentes nativos
-        if target ~= nil and target:IsValid() and target.components.pickable ~= nil and target.components.pickable:CanBePicked() and target.components.pickable.caninteractwith then
-            return BufferedAction(inst, target, ACTIONS.PICK)
+        -- FIX: Added IsEntityBlacklisted to the safeguard
+        if target ~= nil and target:IsValid() and not IsEntityBlacklisted(inst, target) 
+           and target.components.pickable ~= nil and target.components.pickable:CanBePicked() and target.components.pickable.caninteractwith then
+           
+           return BufferedAction(inst, target, ACTIONS.PICK)
         end
     end
 
@@ -637,6 +664,91 @@ local function ShouldCheatKite(inst)
     return false
 end
 
+local function GetLeaderPosition(inst)
+    local leader = inst.components.follower ~= nil and inst.components.follower.leader or nil
+    return leader ~= nil and leader:GetPosition() or nil
+end
+
+-- =========================================================
+-- AMBIENT CHAT AND GREETING SYSTEM
+-- =========================================================
+local function TryAmbientGreeting(inst)
+    -- 1. Sanity checks: Do not interrupt if moving, busy, or fighting
+    if inst.sg:HasStateTag("busy") or inst.sg:HasStateTag("moving") or inst.components.combat:HasTarget() then
+        return
+    end
+
+    local t = GetTime()
+    -- Cooldown: Evaluates once every 45 seconds maximum
+    if inst._last_greet_time ~= nil and (t - inst._last_greet_time) < 45 then
+        return
+    end
+
+    -- 2. Probability check: 30% chance to actually trigger when the cooldown finishes
+    if math.random() > 0.30 then
+        -- Set a minor penalty so he doesn't spam calculation checks every 3 seconds
+        inst._last_greet_time = t - 35 
+        return
+    end
+
+    local x, y, z = inst.Transform:GetWorldPosition()
+    local players = TheSim:FindEntities(x, y, z, 6, { "player" }, { "ghost", "playerghost" })
+    
+    for _, player in ipairs(players) do
+        if player:IsValid() then
+            inst._last_greet_time = t
+            
+            -- Turn physically towards the player
+            inst:FacePoint(player.Transform:GetWorldPosition())
+            
+            -- 3. Trigger StateGraph gesture
+            inst:PushEvent("wilto_greet", { target = player })
+            
+            -- 4. Dynamic Speech Dialogue System
+            if inst.components.talker ~= nil then
+                local player_name = player:GetDisplayName() or "friend"
+                
+                -- List of 10 contextual phrases with string formatting
+                local lines = {
+                    string.format("Hey, %s! How are you doing?", player_name),
+                    string.format("Looking good today, %s.", player_name),
+                    string.format("Stay safe out here, %s.", player_name),
+                    string.format("Need any help, %s?", player_name),
+                    string.format("Oi! %s!", player_name),
+                    string.format("Don't starve, %s. Or else...", player_name),
+                    string.format("Nice to see you, %s.", player_name),
+                    string.format("Hello, %s!", player_name),
+                    string.format("Keep up the good work, %s!", player_name),
+                    string.format("Nice meeting you here, %s.", player_name),
+                    string.format("Hey, %s! Good to see you.", player_name),
+                    string.format("Oh, it's you, %s.", player_name),
+                    string.format("Careful out there, %s.", player_name),
+                    string.format("Need something, %s?", player_name),
+                    string.format("You're still alive. Nice.", player_name),
+                    string.format("Try not to die today, %s.", player_name),
+                    string.format("You smell like campfire smoke, %s.", player_name),
+                    string.format("I was starting to think everyone else disappeared...", player_name),
+                    string.format("Hey! Don't sneak up on me like that, %s.", player_name),
+                    string.format("I hope you brought some food, %s.", player_name),
+                    
+                }
+                
+                local chosen_line = lines[math.random(#lines)]
+                inst.components.talker:Say(chosen_line)
+            end
+            
+            break -- Only greet one player per scan cycle
+        end
+    end
+end
+
+-- =========================================================
+-- DISTANCE CONSTANTS - REWORKED FOR SOFT AREA TRACKING
+-- =========================================================
+local MIN_FOLLOW_DIST = 0.2     -- Never get closer than 3 units to the player
+local TARGET_FOLLOW_DIST = 5  -- When catching up, stop perfectly at 5 units
+local MAX_FOLLOW_DIST = 9     -- Only start running if the player goes 9 units away     
+
 -- =========================================================
 -- MAIN BRAIN STARTUP
 -- =========================================================
@@ -670,10 +782,10 @@ function WiltolionWiltoBrain:OnStart()
     local root = PriorityNode({
         
         -- [ SECTION 1: EMERGENCIES & PANIC ] ------------------
-        -- Highest priority: Survive immediate threats
         avoid_explosions,
         WhileNode(function() return self.inst.components.burnable and self.inst.components.burnable:IsBurning() end, "OnFire", Panic(self.inst)),
         RunAway(self.inst, { fn = IsDanger, tags = {"_combat", "_health"}, notags = {"INLIMBO", "player"} }, 10, 15),
+        RunAway(self.inst, "fire", 2.5, 4.5),
 
         -- [ SECTION 2: SPECIAL EVENTS ] -----------------------
         dance_party,
@@ -696,7 +808,6 @@ function WiltolionWiltoBrain:OnStart()
         ),
 
         -- [ SECTION 4: COMBAT & TACTICS ] ---------------------
-        -- 4.1 Force drop aggro if leader is too far away
         WhileNode(function()
             local current_leader = GetLeader(self.inst)
             local target = self.inst.components.combat.target
@@ -710,7 +821,6 @@ function WiltolionWiltoBrain:OnStart()
             }, 0.25)
         ),
         
-        -- 4.2 Combat maneuvers
         WhileNode(function() return ShouldCheatKite(self.inst) end, "Cheat Kiting",
             RunAway(self.inst, function(guy) 
                 return guy == self.inst.components.combat.target 
@@ -721,7 +831,6 @@ function WiltolionWiltoBrain:OnStart()
         -- [ SECTION 5: WORK & RESOURCE GATHERING ] ------------
         WhileNode(function() return not self.inst.sg:HasStateTag("recoil") end, "Busy State Guard",
             PriorityNode({
-                -- 5.1 Continue current tool action (Chop, Mine, Dig)
                 WhileNode(function() self.keepworking = false return true end, "Keep Working",
                     DoAction(self.inst, function()
                         local act = FindAnyEntityToWorkActionsOn(self.inst)
@@ -735,7 +844,6 @@ function WiltolionWiltoBrain:OnStart()
                     end)),
                 FailIfSuccessDecorator(ConditionWaitNode(function() return not self.keepworking end, "Repeating action")),
 
-                -- 5.2 Harvest and Pickup Actions
                 DoAction(self.inst, FindPlantToPick, "Harvest Plants", true),
                 DoAction(self.inst, FindResourceToPickup, "Pickup Resources", true),
             }, 0.25)),
@@ -745,68 +853,89 @@ function WiltolionWiltoBrain:OnStart()
         DoAction(self.inst, GiveResourcesToLeader, "Give Resources", true),
 
         -- [ SECTION 7: FOLLOW & IDLE ] ------------------------
-        -- Lowest priority: If there's nothing else to do, just hang around the leader
-        SequenceNode{
-            ConditionWaitNode(function()
-                return self.inst._lastruntime == nil or (GetTime() - self.inst._lastruntime > RUN_AFTER_KITE_DELAY)
-            end, "Wait after kiting"),
-            Follow(self.inst, GetLeader, MIN_FOLLOW_DIST, TARGET_FOLLOW_DIST, MAX_FOLLOW_DIST, true),
-        },
+        
+        -- 1. Area Catch-up: If leader is further than 9 units, walk until reaching 5 units.
+        Follow(self.inst, function() return GetLeader(self.inst) end, MIN_FOLLOW_DIST, TARGET_FOLLOW_DIST, MAX_FOLLOW_DIST, true),
+
+        -- 2. Local Area Wander: Once he is between 3 and 9 units away, he stops following.
+        -- He will slowly wander around HIS OWN current position (radius 2.5).
+        -- 5 (target) + 2.5 (wander) = 7.5. Since 7.5 < 9 (max), he will NEVER trigger the yo-yo effect.
+        Wander(self.inst, function() return self.inst:GetPosition() end, 2.5, { 
+            minwalktime = 0.5, 
+            randwalktime = 0.5, 
+            minwaittime = 4.0, 
+            randwaittime = 4.0 
+        }),
+
+        -- 3. Attentive idle
         FaceEntity(self.inst, GetFaceLeaderFn, KeepFaceLeaderFn),
-        CreateWanderer(self, 6),
 
     }, 0.25)
 
-    -- Initialize the Behavior Tree
     self.bt = BT(self.inst, root)
 
     -- =====================================================
-    -- 3. ANTI-STUCK WATCHDOG TASK (Runs alongside the brain)
+    -- WATCHDOG STUCK SYSTEM - REFACTORED
     -- =====================================================
     self.inst:DoPeriodicTask(1, function(inst)
         local current_action = inst:GetBufferedAction()
-        
-        -- Check if Wilto is trying to interact with an object (Pickup, Chop, Mine)
-        if current_action ~= nil and current_action.target ~= nil and 
-           (current_action.action == ACTIONS.PICKUP or current_action.action == ACTIONS.CHOP or current_action.action == ACTIONS.MINE) then
+        if current_action ~= nil and current_action.target ~= nil then
             
+            -- SAFEGUARD: If Wilto is busy performing an action (chopping, mining, digging), 
+            -- he is intentionally standing still. Pause the stuck detection to prevent false positives.
+            if inst.sg and (inst.sg:HasStateTag("busy") or inst.sg:HasStateTag("working") or inst.sg:HasStateTag("doing")) then
+                inst._watchdog_stuck_ticks = 0
+                inst._last_watchdog_pos = inst:GetPosition()
+                return
+            end
+
             local current_pos = inst:GetPosition()
-            
-            -- If Wilto has moved less than 0.5 units in 1 second, he is physically stuck
-            if inst._last_watchdog_pos ~= nil and inst._last_watchdog_pos:DistSq(current_pos) < 0.25 then
-                inst._watchdog_stuck_ticks = (inst._watchdog_stuck_ticks or 0) + 1
-                
-                if inst._watchdog_stuck_ticks >= 3 then -- Stuck for 3 seconds
-                    -- 1. Blacklist the unreachable target for 60 seconds
-                    if inst._blacklisted_items == nil then
-                        inst._blacklisted_items = {}
+            if inst._last_watchdog_pos ~= nil then
+                -- distsq < 0.1 means he hasn't moved a single unit
+                if distsq(current_pos, inst._last_watchdog_pos) < 0.1 then
+                    inst._watchdog_stuck_ticks = (inst._watchdog_stuck_ticks or 0) + 1
+                    if inst._watchdog_stuck_ticks >= 3 then 
+                        if inst._blacklisted_items == nil then
+                            inst._blacklisted_items = {}
+                        end
+                        -- Blacklist the physically unreachable entity for 60 seconds
+                        inst._blacklisted_items[current_action.target] = GetTime() + 60
+                        
+                        inst:ClearBufferedAction()
+                        if inst.components.locomotor ~= nil then
+                            inst.components.locomotor:Stop()
+                        end
+                        
+                        -- FIX: Force clear the custom brain cache so he doesn't lock onto it again
+                        inst._work_target = nil
+                        
+                        if self.bt ~= nil then
+                            self.bt:Reset()
+                        end
+                        
+                        inst._watchdog_stuck_ticks = 0
+                        inst._last_watchdog_pos = nil
                     end
-                    inst._blacklisted_items[current_action.target] = GetTime() + 60
-                    
-                    -- 2. Force drop the action and stop physical movement
-                    inst:ClearBufferedAction()
-                    inst.components.locomotor:Stop()
-                    
-                    -- 3. Reset the behavior tree to evaluate new priorities
-                    if self.bt ~= nil then
-                        self.bt:Reset()
-                    end
-                    
-                    -- Reset watchdog trackers
+                else
                     inst._watchdog_stuck_ticks = 0
-                    inst._last_watchdog_pos = nil
+                    inst._last_watchdog_pos = current_pos
                 end
             else
-                -- Entity is moving fine towards the target
+                -- FIX: Initialize the baseline position so the timer can actually start tracking
                 inst._watchdog_stuck_ticks = 0
-                inst._last_watchdog_pos = current_pos
+                inst._last_watchdog_pos = current_pos 
             end
         else
-            -- No active interaction action, reset watchdog
             inst._watchdog_stuck_ticks = 0
             inst._last_watchdog_pos = nil
         end
     end)
+
+    -- =====================================================
+    -- 4. AMBIENT GREETING SYSTEM - FIXED
+    -- =====================================================
+    self.inst:DoPeriodicTask(3, TryAmbientGreeting)
+
 end
 
 return WiltolionWiltoBrain

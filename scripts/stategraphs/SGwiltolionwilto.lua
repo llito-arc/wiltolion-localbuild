@@ -93,6 +93,21 @@ local events =
             inst.sg:GoToState("dance")
         end
     end),
+
+    -- AMBIENT GREETING EVENT
+    EventHandler("wilto_greet", function(inst, data)
+        if not inst.sg:HasStateTag("busy") and not inst.components.health:IsDead() then
+            inst.sg:GoToState("greet", data)
+        end
+    end),
+}
+
+local GREETING_ANIMS = {
+    "emoteXL_waving1",
+    "emoteXL_happycheer",
+    "emote_yawn",
+    "emote_laugh",
+    "emote_jumpcheer"
 }
 
 local states =
@@ -131,6 +146,40 @@ local states =
         end,
     },
 
+    -- =====================================================
+    -- GREETING STATE (USING EXISTING ANIMATIONS)
+    -- =====================================================
+    State {
+        name = "greet",
+        tags = { "idle", "canrotate" }, -- FIX: Removed "idle" to prevent Brain interruptions
+        
+        onenter = function(inst, data)
+            -- FIX: Stop locomotor logic instead of just physics to clear pathfinding
+            if inst.components.locomotor ~= nil then
+                inst.components.locomotor:Stop()
+            end
+            
+            -- SAFEGUARD: Check if target exists and is valid before forcing rotation
+            if data ~= nil and data.target ~= nil and data.target:IsValid() then
+                inst:ForceFacePoint(data.target.Transform:GetWorldPosition())
+            end
+            
+            -- Fetch a random emote using Klei's native math utility
+            local random_anim = GetRandomItem(GREETING_ANIMS)
+            inst.AnimState:PlayAnimation(random_anim) 
+        end,
+
+        events = {
+            -- Triggered when the current animation sequence finishes
+            EventHandler("animover", function(inst)
+                -- SAFEGUARD: Ensure the animation wasn't interrupted by an external force
+                if inst.AnimState:AnimDone() then
+                    inst.sg:GoToState("idle")
+                end
+            end),
+        },
+    },
+
     State{
         name = "run_start",
         tags = {"moving", "running", "canrotate"},
@@ -159,11 +208,26 @@ local states =
             
             -- Si viene un target en data lo usamos, si no, intentamos el líder por si acaso
             inst.sg.statemem.target = (data and data.target) or (inst.components.follower and inst.components.follower:GetLeader())
+            -- Place this upvalue array at the top of the file.
+            -- The '%s' acts as a dynamic placeholder for the target's name.
+            local HEAL_START_LINES = {
+                "Hold still, %s! Let me help you!",
+                "Don't worry, %s, I've got you covered!",
+                "Stay calm, %s, this will patch you right up.",
+                "Hold on, %s, let me take care of those wounds.",
+                "Just a moment, %s, healing is on the way!",
+                "Keep steady, %s! This might tingle a bit.",
+                "I'm on it, %s! Let's get you back in fighting shape!"
+            }
             
             if inst.components.talker and inst.sg.statemem.target then
-                -- Wilto ahora saluda a quien va a curar
+                -- Fallback safety check for the target's name
                 local name = inst.sg.statemem.target.name or "friend"
-                inst.components.talker:Say("Hold still, " .. name .. "! Let me help you!")
+                -- 1. Grab a random template line safely using Klei's utility
+                local raw_line = GetRandomItem(HEAL_START_LINES)
+                -- 2. Dynamically inject the name into the placeholder without creating memory leaks
+                local formatted_line = string.format(raw_line, name)
+                inst.components.talker:Say(formatted_line)
             end
         end,
         

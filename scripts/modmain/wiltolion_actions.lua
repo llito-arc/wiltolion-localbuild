@@ -2,7 +2,7 @@ local GLOBAL = GLOBAL
 local json = GLOBAL.require("json")
 
 GLOBAL.STRINGS.CHARACTERS.GENERIC.ACTIONFAIL.TRAVEL_PYLON = {
-    NOT_LEARNED = "I don't know how to use this network yet.",
+    NOT_LEARNED = "I don't know how to use this yet.",
     NO_ENERGY = "It needs more solar energy...",
 }
 GLOBAL.STRINGS.CHARACTERS.WILTOLION = GLOBAL.STRINGS.CHARACTERS.WILTOLION or { ACTIONFAIL = {} }
@@ -51,11 +51,12 @@ AddModRPCHandler("Wiltolion", "ToggleWiltoAction", function(player, action_name,
     local is_enabled = (is_enabled_num == 1) 
     local wilto = GetPlayerWilto(player)
     
-    if wilto ~= nil then
+    -- SAFEGUARD: Ensure Wilto actually exists and is valid before mutating his state
+    if wilto ~= nil and wilto:IsValid() then
         if wilto.wilto_toggles == nil then wilto.wilto_toggles = {} end
         wilto.wilto_toggles[action_name] = is_enabled
         
-        if action_name == "fight" and not is_enabled and wilto.components.combat then
+        if action_name == "fight" and not is_enabled and wilto.components.combat ~= nil then
             wilto.components.combat:DropTarget()
         end
     end
@@ -63,48 +64,71 @@ end)
 
 AddModRPCHandler("Wiltolion", "WiltoDropEverything", function(player)
     local wilto = GetPlayerWilto(player)
-    if wilto ~= nil then
-        if wilto.wilto_toggles == nil then wilto.wilto_toggles = {} end
-        wilto.wilto_toggles["pickup"] = false
-        
-        if wilto.components.inventory ~= nil then
-            wilto.components.inventory:DropEverything(false, false)
-        end
-        if wilto.components.talker ~= nil then
-            wilto.components.talker:Say("Take whatever you want...")
+    
+    if wilto ~= nil and wilto:IsValid() then
+        -- SAFEGUARD: Prevent engine crash. Do not attempt to drop items if Wilto 
+        -- is traveling through wormholes, caves, or disconnected (INLIMBO).
+        if not wilto:HasTag("INLIMBO") and wilto.Transform ~= nil then
+            local x, y, z = wilto.Transform:GetWorldPosition()
+            
+            -- Absolute guarantee that world coordinates exist
+            if x ~= nil and y ~= nil and z ~= nil then
+                if wilto.wilto_toggles == nil then wilto.wilto_toggles = {} end
+                wilto.wilto_toggles["pickup"] = false
+                
+                if wilto.components.inventory ~= nil then
+                    wilto.components.inventory:DropEverything(false, false)
+                end
+                if wilto.components.talker ~= nil then
+                    wilto.components.talker:Say("Take whatever you want...")
+                end
+            end
         end
     end
 end)
 
 AddModRPCHandler("Wiltolion", "CallWilto", function(player)
-    if not player or player:HasTag("playerghost") then return end
+    -- SAFEGUARD: The player calling must be alive and physically in the world
+    if not player or not player:IsValid() or player:HasTag("playerghost") or player:HasTag("INLIMBO") then return end
+    
     local wilto = GetPlayerWilto(player)
 
-    if not wilto then
+    if not wilto or not wilto:IsValid() then
         if player.components.talker then player.components.talker:Say("He is not in this world...") end
         return
     end
 
-    if player.components.inventory:Has("wiltolion_sundrop", 3) then
+    if player.components.inventory ~= nil and player.components.inventory:Has("wiltolion_sundrop", 3) then
         player.components.inventory:ConsumeByName("wiltolion_sundrop", 3)
         
         local pt = player:GetPosition()
-        local offset = GLOBAL.FindWalkableOffset(pt, math.random() * 2 * GLOBAL.PI, 2.5, 8, true, true)
-        if offset ~= nil then
-            pt.x = pt.x + offset.x
-            pt.z = pt.z + offset.z
+        if pt ~= nil then
+            local offset = GLOBAL.FindWalkableOffset(pt, math.random() * 2 * GLOBAL.PI, 2.5, 8, true, true)
+            if offset ~= nil then
+                pt.x = pt.x + offset.x
+                pt.z = pt.z + offset.z
+            end
+
+            -- Only spawn effects if Wilto's previous transform exists
+            if wilto.Transform ~= nil and not wilto:HasTag("INLIMBO") then
+                local fx_old = GLOBAL.SpawnPrefab("halloween_firepuff_1")
+                fx_old.Transform:SetPosition(wilto.Transform:GetWorldPosition())
+            end
+
+            -- Only teleport if Wilto has physical properties loaded
+            if wilto.Physics ~= nil then
+                wilto.Physics:Teleport(pt.x, 0, pt.z)
+            end
+
+            local fx_new = GLOBAL.SpawnPrefab("halloween_firepuff_3")
+            fx_new.Transform:SetPosition(pt.x, 0.5, pt.z)
+            
+            if wilto.SoundEmitter ~= nil then
+                wilto.SoundEmitter:PlaySound("dontstarve/common/staff_blink")
+            end
+            
+            if player.components.talker then player.components.talker:Say("To my side, Wilto!") end
         end
-
-        local fx_old = GLOBAL.SpawnPrefab("halloween_firepuff_1")
-        fx_old.Transform:SetPosition(wilto.Transform:GetWorldPosition())
-
-        wilto.Physics:Teleport(pt.x, 0, pt.z)
-
-        local fx_new = GLOBAL.SpawnPrefab("halloween_firepuff_3")
-        fx_new.Transform:SetPosition(pt.x, 0.5, pt.z)
-        wilto.SoundEmitter:PlaySound("dontstarve/common/staff_blink")
-        
-        if player.components.talker then player.components.talker:Say("To my side, Wilto!") end
     else
         if player.components.talker then player.components.talker:Say("I need some energy to call him!") end
     end
@@ -153,7 +177,7 @@ local TRAVEL_PYLON = AddAction("TRAVEL_PYLON", "Travel", function(act)
     end
     return false
 end)
-TRAVEL_PYLON.distance = 20 
+TRAVEL_PYLON.distance = 2
 TRAVEL_PYLON.priority = 10
 
 -- ==========================================
@@ -176,15 +200,19 @@ AddClientModRPCHandler("Wiltolion", "OpenPylonMap", function(pylon_inst, json_da
 end)
 
 AddModRPCHandler("Wiltolion", "TravelToPylon", function(player, origin_pylon, dest_x, dest_z)
-    if origin_pylon and origin_pylon:IsValid() and origin_pylon.components.container then
-        if origin_pylon.components.container:Has("wiltolion_sundrop", 5) then
-            origin_pylon.components.container:ConsumeByName("wiltolion_sundrop", 5)
-            if player.sg then
-                player.sg:GoToState("wiltolion_pylon_travel", {x = dest_x, z = dest_z})
-            end
-        else
-            if player.components.talker then
-                player.components.talker:Say("The energy is depleted!")
+    -- SAFEGUARD: Player must be physically capable of executing the travel state
+    if player ~= nil and player:IsValid() and not player:HasTag("INLIMBO") and not player:HasTag("playerghost") then
+        if origin_pylon and origin_pylon:IsValid() and origin_pylon.components.container then
+            if origin_pylon.components.container:Has("wiltolion_sundrop", 5) then
+                origin_pylon.components.container:ConsumeByName("wiltolion_sundrop", 5)
+                
+                if player.sg then
+                    player.sg:GoToState("wiltolion_pylon_travel", {x = dest_x, z = dest_z})
+                end
+            else
+                if player.components.talker then
+                    player.components.talker:Say("The energy is depleted!")
+                end
             end
         end
     end
@@ -681,32 +709,3 @@ AddStategraphState("wilson", alter_call_server)
 AddStategraphState("wilson_client", alter_call_client)
 AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.ALTER_CALL, "wiltolion_alter_call"))
 AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.ALTER_CALL, "wiltolion_alter_call"))
-
--- ===========================================================================
--- OVERHEAT ANIMATION SUPPRESSION FOR WILTOLION
--- ===========================================================================
-
--- Intercepts the native idle_hot state directly inside the StateGraph
-local function SuppressWiltolionIdleHot(sg)
-    -- Store the original game function to not break other characters
-    local old_idle_hot_onenter = sg.states["idle_hot"].onenter
-    
-    sg.states["idle_hot"].onenter = function(inst, pushanim)
-        if inst:HasTag("wiltolion") then
-            -- Bypass the panting animation completely.
-            -- Playing the standard idle loop satisfies the StateGraph event queue
-            -- while visually keeping Wiltolion completely calm and majestic.
-            inst.AnimState:PlayAnimation("idle_loop", true)
-        else
-            -- If it's a normal character (like Wilson), run the standard hot animation
-            if old_idle_hot_onenter then
-                old_idle_hot_onenter(inst, pushanim)
-            end
-        end
-    end
-end
-
--- Apply the injection to both the server and the client predictor
--- This ensures the fix works perfectly across cave shards and high latency
-AddStategraphPostInit("wilson", SuppressWiltolionIdleHot)
-AddStategraphPostInit("wilson_client", SuppressWiltolionIdleHot)

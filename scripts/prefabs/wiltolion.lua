@@ -563,8 +563,8 @@ local master_postinit = function(inst)
 
     if inst.components.temperature then
         inst.components.temperature.maxtemp = 99
-        inst.components.temperature.hurttemp = 99
-        inst.components.temperature.overheattemp = 99
+        inst.components.temperature.hurttemp = 990
+        inst.components.temperature.overheattemp = 980
         inst.components.temperature.mintemp = -20 
     end
 
