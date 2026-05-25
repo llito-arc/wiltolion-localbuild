@@ -4,6 +4,34 @@ local assets = {
     Asset("ATLAS", "images/inventoryimages/wiltolion_sundrop.xml"),
 }
 
+local function OnDeploy(inst, pt, deployer)
+    -- Strict validation: Check if deployer has enough hunger to pay the cost
+    if deployer ~= nil and deployer.components.hunger ~= nil then
+        if deployer.components.hunger.current < 10 then
+            -- Provide feedback to the player and cancel the deployment
+            if deployer.components.talker ~= nil then
+                deployer.components.talker:Say("I'm hungry!")
+            end
+            return
+        end
+        
+        -- Safely deduct 10 hunger
+        deployer.components.hunger:DoDelta(-10)
+    end
+
+    local flower = SpawnPrefab("wiltolion_flower")
+    if flower ~= nil then
+        flower.Transform:SetPosition(pt:Get())
+        
+        -- Consume the item
+        inst.components.stackable:Get():Remove()
+        
+        if deployer ~= nil and deployer.SoundEmitter ~= nil then
+            deployer.SoundEmitter:PlaySound("dontstarve/wilson/plant_seeds")
+        end
+    end
+end
+
 local function fn()
     local inst = CreateEntity()
 
@@ -53,8 +81,16 @@ local function fn()
     inst:AddComponent("edible")
     inst.components.edible.foodtype = FOODTYPE.GENERIC
     inst.components.edible.healthvalue = 2
-    inst.components.edible.hungervalue = 1
+    inst.components.edible.hungervalue = 2
     inst.components.edible.sanityvalue = 0
+
+    -- ==========================================
+    -- DEPLOYABLE SETUP (PLANTING FLOWERS)
+    -- ==========================================
+    inst:AddComponent("deployable")
+    inst.components.deployable.ondeploy = OnDeploy
+    inst.components.deployable:SetDeployMode(DEPLOYMODE.PLANT)
+    inst.components.deployable:SetDeploySpacing(DEPLOYSPACING.LESS)
 
     inst.components.edible:SetOnEatenFn(function(inst, eater)
         if eater ~= nil and eater:IsValid() then
@@ -188,4 +224,9 @@ local function fn()
     return inst
 end
 
-return Prefab("wiltolion_sundrop", fn, assets)
+-- ==========================================
+-- GHOST PLACER FOR GEOMETRIC PLACEMENT
+-- ==========================================
+-- MakePlacer arguments: prefab_name, bank, build, default_animation
+return Prefab("wiltolion_sundrop", fn, assets),
+       MakePlacer("wiltolion_sundrop_placer", "wiltolion_flower", "wiltolion_flower", "f1")

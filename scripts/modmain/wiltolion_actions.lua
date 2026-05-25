@@ -87,14 +87,51 @@ AddModRPCHandler("Wiltolion", "WiltoDropEverything", function(player)
     end
 end)
 
+-- =====================================================================
+-- SAFEGUARD HELPER: Completely wipes Wilto's memory and restarts his AI
+-- =====================================================================
+local function ForceResetWiltoAI(wilto)
+    if wilto == nil or not wilto:IsValid() then return end
+    
+    -- 1. Stop all movement logic
+    if wilto.components.locomotor ~= nil then
+        wilto.components.locomotor:Stop()
+        wilto.components.locomotor:Clear()
+    end
+    
+    -- 2. Clear any hanging actions that cause StateGraph deadlocks
+    wilto:ClearBufferedAction()
+    
+    -- 3. Force StateGraph to a neutral state (interrupts stuck animations)
+    if wilto.sg ~= nil then
+        wilto.sg:GoToState("idle")
+    end
+    
+    -- 4. Clear custom brain cache variables (from wiltolionwilto_brain.lua)
+    wilto._work_target = nil
+    wilto._pickup_target = nil
+    wilto._next_work_scan = nil
+    wilto._next_sort_scan = nil
+    wilto._next_pickup_scan = nil
+    wilto._blacklisted_items = nil
+    
+    -- 5. Hard restart the Brain threads
+    wilto:RestartBrain()
+end
+
+-- =====================================================================
+-- RPC HANDLER: Call Wilto
+-- =====================================================================
 AddModRPCHandler("Wiltolion", "CallWilto", function(player)
     -- SAFEGUARD: The player calling must be alive and physically in the world
-    if not player or not player:IsValid() or player:HasTag("playerghost") or player:HasTag("INLIMBO") then return end
+    if player == nil or not player:IsValid() or player:HasTag("playerghost") or player:HasTag("INLIMBO") then return end
     
     local wilto = GetPlayerWilto(player)
 
-    if not wilto or not wilto:IsValid() then
-        if player.components.talker then player.components.talker:Say("He is not in this world...") end
+    if wilto == nil or not wilto:IsValid() then
+        if player.components.talker ~= nil then 
+            player.components.talker:Say("He is not in this world...") 
+        end
         return
     end
 
@@ -109,13 +146,16 @@ AddModRPCHandler("Wiltolion", "CallWilto", function(player)
                 pt.z = pt.z + offset.z
             end
 
+            -- FIX: Apply full AI Reset BEFORE teleporting to clear invalid states
+            ForceResetWiltoAI(wilto)
+
             -- Only spawn effects if Wilto's previous transform exists
             if wilto.Transform ~= nil and not wilto:HasTag("INLIMBO") then
                 local fx_old = GLOBAL.SpawnPrefab("halloween_firepuff_1")
                 fx_old.Transform:SetPosition(wilto.Transform:GetWorldPosition())
             end
 
-            -- Only teleport if Wilto has physical properties loaded
+            -- Teleport securely
             if wilto.Physics ~= nil then
                 wilto.Physics:Teleport(pt.x, 0, pt.z)
             end
@@ -127,10 +167,14 @@ AddModRPCHandler("Wiltolion", "CallWilto", function(player)
                 wilto.SoundEmitter:PlaySound("dontstarve/common/staff_blink")
             end
             
-            if player.components.talker then player.components.talker:Say("To my side, Wilto!") end
+            if player.components.talker ~= nil then 
+                player.components.talker:Say("To my side, Wilto!") 
+            end
         end
     else
-        if player.components.talker then player.components.talker:Say("I need some energy to call him!") end
+        if player.components.talker ~= nil then 
+            player.components.talker:Say("I need some energy to call him!") 
+        end
     end
 end)
 
@@ -642,7 +686,25 @@ AddComponentAction("SCENE", "combat", function(inst, doer, actions, right)
         local weapon = doer.replica.inventory:GetEquippedItem(GLOBAL.EQUIPSLOTS.HANDS)
         local is_staff = weapon ~= nil and weapon:HasTag("castspell")
         
-        if not is_staff and doer.replica.combat:CanTarget(inst) then
+        -- =====================================================
+        -- FRIENDLY FIRE SAFEGUARD
+        -- =====================================================
+        -- 1. Base exclusions: Pets, walls, and players (if PVP is off)
+        local is_ally = inst:HasTag("companion") or 
+                        inst:HasTag("wall") or 
+                        (inst:HasTag("player") and not GLOBAL.TheNet:GetPVPEnabled())
+        
+        -- 2. Hired followers exclusion: Protects pigs, bunnymen, or other followers
+        if not is_ally and inst.replica.follower ~= nil then
+            local leader = inst.replica.follower:GetLeader()
+            -- If the target is currently following a player, treat it as an ally
+            if leader ~= nil and leader:HasTag("player") then
+                is_ally = true
+            end
+        end
+        
+        -- Only allow the action if it's NOT a staff, NOT an ally, and CAN be targeted
+        if not is_staff and not is_ally and doer.replica.combat:CanTarget(inst) then
             table.insert(actions, GLOBAL.ACTIONS.ALTER_CALL)
         end
     end

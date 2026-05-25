@@ -5,18 +5,30 @@ local assets = {
 local prefabs = {}
 
 local brain = require("brains/wiltolionwilto_brain")
+local speech = require("speech_wilto") -- External dialogue dictionary
 
 -- =========================================================
--- SISTEMA MÉDICO Y TOKENS DE CURACIÓN
+-- CORE STATS & BALANCE
+-- All variables modifying Wilto's power should be changed here.
+-- =========================================================
+local WILTO_STATS = {
+    MAX_HEALTH = 120,
+    REGEN_AMOUNT = 3,
+    REGEN_PERIOD = 10,
+    BASE_DAMAGE = 15,
+    ATTACK_PERIOD = 0.50,
+    RUN_SPEED = 8.5,
+    WALK_SPEED = 5.5,
+    DROWN_DAMAGE = -20,
+    SINK_DAMAGE = -15
+}
+
+-- =========================================================
+-- MEDICAL SYSTEM & HEALING TOKENS
 -- =========================================================
 
--- 1. AQUÍ DECIDES CUÁNTOS PUNTOS DA CADA OBJETO
--- Añade o quita lo que quieras (el nombre interno de DST, ej: "jellybean" = 50)
--- =========================================================
--- 1. AQUÍ DECIDES CUÁNTOS PUNTOS DA CADA OBJETO
--- =========================================================
 local HEALING_VALUES = {
-    -- [ Los que ya tenías ] --
+    -- Base game heals
     honey = 5,
     butterflywings = 5,
     bluecap = 10,
@@ -25,100 +37,79 @@ local HEALING_VALUES = {
     healingsalve = 30,
     bandage = 50, 
     
-    -- [ Plantas y Básicos (1 punto) ] --
-    petals = 5,             -- Flores normales.
-    foliage = 5,            -- Helechos de las cuevas.
-    lightbulb = 3,          -- Bioluminiscencia. ¡Para un ser de luz/sol es alimento puro!
-    kelp = 5,               -- Algas marinas (superalimento).
+    -- Plants and basics (1 point)
+    petals = 5,
+    foliage = 5,
+    lightbulb = 3,
+    kelp = 5,
 
-    -- [ Inusuales y Restos de Monstruos (2 a 5 puntos) ] --
-    moon_tree_blossom = 10,  -- Flores lunares.
-    batwing = 5,            -- Las alas de murciélago se comen en el juego base para curar un poco.
-    -- [ Objetos Raros / Médicos Fuertes (10 a 20 puntos) ] --
-    lifeinjector = 60,      -- Booster shot. Medicina de muy alto nivel. (Vale por 1 curación instantánea).
+    -- Unusual & monster drops (2 to 5 points)
+    moon_tree_blossom = 10,
+    batwing = 5,
+
+    -- High-tier medical (10 to 20 points)
+    lifeinjector = 60,
     
-    -- [ Épicos / Jefes (30+ puntos) ] --
-    royal_jelly = 60,       -- Jalea Real (Reina Abeja). 
-    jellybean = 120,         -- Gominolas curativas.
+    -- Epic / Boss drops (30+ points)
+    royal_jelly = 60,
+    jellybean = 120,
 }
 
--- 2. AQUÍ CONFIGURAS LOS LÍMITES
-local POINTS_PER_TOKEN = 30 -- ¿Cuántos puntos cuesta conseguir 1 curación?
-local MAX_TOKENS = 20        -- ¿Cuántas curaciones máximas puede guardar a la vez?
+local POINTS_PER_TOKEN = 30
+local MAX_TOKENS = 20
 
 local function ProcessHealingItems(inst)
     if not inst.components.inventory then return end
-    
-    -- Si ya está lleno, ni se molesta en mirar la mochila
     if (inst.wilto_heal_tokens or 0) >= MAX_TOKENS then return end
 
     local inv = inst.components.inventory
     local points_gained_this_tick = 0
     
-    -- PASO A: Recorrer el inventario buscando objetos médicos
     for k, v in pairs(inv.itemslots) do
         if v and HEALING_VALUES[v.prefab] then
             local item_value = HEALING_VALUES[v.prefab]
             
-            -- PASO B: Consumir el stack UNO POR UNO mientras necesite tokens
             while v and v:IsValid() and (inst.wilto_heal_tokens or 0) < MAX_TOKENS do
-                
-                -- Sumamos los puntos de ese objeto individual
                 points_gained_this_tick = points_gained_this_tick + item_value
                 inst.wilto_heal_points = (inst.wilto_heal_points or 0) + item_value
                 
-                -- Convertimos los puntos acumulados en Tokens
                 while inst.wilto_heal_points >= POINTS_PER_TOKEN do
                     inst.wilto_heal_points = inst.wilto_heal_points - POINTS_PER_TOKEN
                     inst.wilto_heal_tokens = (inst.wilto_heal_tokens or 0) + 1
                 end
                 
-                -- Le quitamos 1 unidad al stack. Si se acaba, borramos el objeto.
                 if v.components.stackable and v.components.stackable:IsStack() then
                     local single_item = v.components.stackable:Get()
                     single_item:Remove()
                 else
                     inv:RemoveItem(v)
                     v:Remove()
-                    break -- Stack terminado, pasamos al siguiente slot
+                    break 
                 end
             end
         end
         
-        -- Si en medio del proceso alcanzamos el límite máximo, rompemos la búsqueda
         if (inst.wilto_heal_tokens or 0) >= MAX_TOKENS then
-            inst.wilto_heal_points = 0 -- Limpiamos puntos sobrantes para ser limpios
+            inst.wilto_heal_points = 0 
             break
         end
     end
 
-    local HEAL_GATHER_LINES = {
-        "I'm saving this to patch you up!",
-        "This will make a fine bandage later!",
-        "More medical supplies for the road.",
-        "Keep them coming, I'll keep us alive!",
-        "Stored! Let me know if you need first aid.",
-        "Perfect. I'll convert this into healing materials!"
-    }
-    
     if points_gained_this_tick > 0 and inst.components.talker then
-        -- Klei's native global utility to safely pick a random element from a flat array
-        local chosen_line = GetRandomItem(HEAL_GATHER_LINES)
-        inst.components.talker:Say(chosen_line)
+        inst.components.talker:Say(GetRandomItem(speech.HEAL_GATHER))
     end
 end
+
 -- =========================================================
--- INTELIGENCIA DE COMBATE Y HERRAMIENTAS
+-- COMBAT INTELLIGENCE & TARGETING
 -- =========================================================
 
--- Evalúa si Wilto debe huir para sobrevivir
 local function ShouldFleeForSurvival(inst)
     if not inst.components.health or inst.components.health:IsDead() then return false end
     
     local hp_percent = inst.components.health:GetPercent()
     local has_armor = false
     
-    -- Revisamos si lleva puesto algo que lo proteja (Casco o Armadura)
     if inst.components.inventory then
         local body = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.BODY)
         local head = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.HEAD)
@@ -127,25 +118,10 @@ local function ShouldFleeForSurvival(inst)
         end
     end
 
-    -- UMBRALES DE PÁNICO:
-    -- Si tiene armadura, aguanta hasta el 15% de vida.
-    -- Si no tiene armadura, entra en pánico al 30% de vida.
-    local COMPLAINT_LINES = {
-        "I can't take much more of this!",
-        "Fall back! I cannot survive another hit!",
-        "I'm hurt out here...!",
-        "Getting out of here...!",
-        "No, no, no!",
-        "I need to patch up immediately! Cover me!",
-        "My vision is fading...!"
-    }
-
+    -- Panic thresholds: 15% with armor, 30% without armor
     if (has_armor and hp_percent <= 0.15) or (not has_armor and hp_percent <= 0.30) then
-        -- Opcional: Que pida ayuda
         if inst.components.talker and math.random() < 0.05 then
-            -- Klei's native global utility to safely pick a random line from the array
-            local chosen_line = GetRandomItem(COMPLAINT_LINES)
-            inst.components.talker:Say(chosen_line)
+            inst.components.talker:Say(GetRandomItem(speech.COMBAT_FLEE))
         end
         return true
     end
@@ -153,17 +129,45 @@ local function ShouldFleeForSurvival(inst)
     return false
 end
 
-local function wiltoretargetfn(inst)
-    if inst.sg:HasStateTag("dancing") then return nil end
+-- Evaluates if the target has any active invincibility frames or magic shields
+local function IsTargetVulnerable(target)
+    if target == nil or not target:IsValid() then return false end
     
-    -- CORRECCIÓN: Ahora solo se rinde si el botón está explícitamente en false
+    -- 1. General Invincibility (Works for Klaus, Deerclops spawn, etc.)
+    if target.components.health ~= nil and target.components.health:IsInvincible() then
+        return false
+    end
+    
+    -- 2. Ancient Fuelweaver (stalker_atrium) specific bypass
+    if target.prefab == "stalker_atrium" then
+        if target.hasshield or target.shield ~= nil then return false end
+        
+        if target.components.health ~= nil and target.components.health.externalabsorptmodifiers ~= nil then
+            if target.components.health.externalabsorptmodifiers:Get() >= 1 then
+                return false
+            end
+        end
+        
+        local x, y, z = target.Transform:GetWorldPosition()
+        local hands = TheSim:FindEntities(x, y, z, 30, {"stalkerminion"}, {"INLIMBO"})
+        if #hands > 0 then return false end
+    end
+    
+    return true
+end
+
+local function wiltoretargetfn(inst)
+    if inst.sg and inst.sg:HasStateTag("dancing") then return nil end
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false then return nil end
     
     local leader = inst.components.follower and inst.components.follower:GetLeader()
     if not leader then return nil end
 
     local target = leader.components.combat and leader.components.combat.target
-    if target ~= nil and target ~= leader and not target:HasTag("player") and inst.components.combat:CanTarget(target) then
+    
+    if target ~= nil and target ~= leader and not target:HasTag("player") 
+       and inst.components.combat:CanTarget(target) 
+       and IsTargetVulnerable(target) then
         return target
     end
 
@@ -171,59 +175,47 @@ local function wiltoretargetfn(inst)
 end
 
 local function wiltokeeptargetfn(inst, target)
-    -- Si le ordenaste no pelear
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false then return false end
-    
-    -- NUEVA BARRERA: Si se está muriendo, suelta al objetivo
     if ShouldFleeForSurvival(inst) then return false end
     
-    return inst.components.combat:CanTarget(target) and not inst.sg:HasStateTag("dancing")
+    return inst.components.combat:CanTarget(target) 
+       and not (inst.sg and inst.sg:HasStateTag("dancing"))
+       and IsTargetVulnerable(target)
 end
-
--- Clasifica los objetos para saber qué son
-local function CategorizeItem(item)
-    if not item or not item.components.equippable then return nil end
-    if item.components.equippable.equipslot == EQUIPSLOTS.HEAD then return "helmet" end
-    if item.components.equippable.equipslot == EQUIPSLOTS.BODY then return "armor" end
-    if item.components.tool then
-        if item.components.tool:CanDoAction(ACTIONS.CHOP) then return "axe" end
-        if item.components.tool:CanDoAction(ACTIONS.MINE) then return "pickaxe" end
-        if item.components.tool:CanDoAction(ACTIONS.DIG) then return "shovel" end
-    end
-    if item.components.weapon then return "weapon" end
-    return "other"
-end
-
 
 -- =========================================================
 -- SMART EQUIPMENT SYSTEM
+-- Evaluates and equips the best weapons and armor automatically.
 -- =========================================================
 
--- Evaluates the raw power of an item based on Klei's native stats
+-- Calculates a numeric score for an item to determine if it's an upgrade.
+-- Modders can tweak these values to prioritize specific types of gear.
 local function GetItemScore(item)
     if not item or not item:IsValid() then return 0 end
     
-    -- Weapon score is driven by damage
+    -- Evaluate Weapons
     if item.components.weapon ~= nil then
         local dmg = item.components.weapon.damage or 0
-        if type(dmg) == "function" then dmg = 15 end -- Approximate dynamic damage
-        -- Penalize tools slightly so pure weapons are preferred
+        -- Some modded weapons use functions instead of static numbers for damage.
+        -- We assign a default estimate to prevent math errors.
+        if type(dmg) == "function" then dmg = 15 end 
+        
+        -- Critical variable: Tool penalty. 
+        -- Subtracting 10 from tools ensures Wilto prefers real weapons (like a Spear) 
+        -- over tools (like an Axe), even if they do similar damage.
         if item.components.tool ~= nil then dmg = dmg - 10 end 
         return dmg
     end
     
-    -- Armor score is driven by absorption percentage (0.0 to 1.0)
+    -- Evaluate Armor
     if item.components.armor ~= nil then
+        -- Armor score is based on damage absorption percentage (e.g., 0.8 * 100 = 80 score)
         return (item.components.armor.absorb_percent or 0) * 100
     end
     
     return 0
 end
 
--- Scans the entire inventory and equips the items with the highest score
--- =========================================================
--- SMART EQUIPMENT SYSTEM (Context Aware)
--- =========================================================
 local function EquipBestGear(inst)
     local inv = inst.components.inventory
     if not inv then return end
@@ -236,32 +228,24 @@ local function EquipBestGear(inst)
     local best_armor = current_armor
     local best_helmet = current_helmet
 
-    -- CONTEXT CONTROLLER: Is Wilto currently engaged in combat?
+    -- Check if Wilto is currently fighting
     local in_combat = inst.components.combat ~= nil and inst.components.combat.target ~= nil
 
-    -- Scan inventory for the best replacement
     for k, item in pairs(inv.itemslots) do
-        if item:IsValid() and item.components.equippable ~= nil then
+        if item and item:IsValid() and item.components.equippable ~= nil then
             local slot = item.components.equippable.equipslot
             local score = GetItemScore(item)
 
             if slot == EQUIPSLOTS.BODY then
-                if score > GetItemScore(best_armor) then
-                    best_armor = item
-                end
+                if score > GetItemScore(best_armor) then best_armor = item end
             elseif slot == EQUIPSLOTS.HEAD then
-                if score > GetItemScore(best_helmet) then
-                    best_helmet = item
-                end
+                if score > GetItemScore(best_helmet) then best_helmet = item end
             elseif slot == EQUIPSLOTS.HANDS then
+                -- Only aggressively swap weapons if actively in combat.
+                -- If peaceful, only equip if hands are completely empty.
                 if in_combat then
-                    -- COMBAT MODE: Actively override any tool for the highest damage weapon
-                    if score > GetItemScore(best_weapon) then
-                        best_weapon = item
-                    end
+                    if score > GetItemScore(best_weapon) then best_weapon = item end
                 else
-                    -- PEACEFUL MODE: Respect currently equipped tools (like axes/pickaxes).
-                    -- Only force equip a weapon if his hands are completely empty.
                     if current_weapon == nil and score > GetItemScore(best_weapon) then
                         best_weapon = item
                     end
@@ -270,21 +254,209 @@ local function EquipBestGear(inst)
         end
     end
 
-    -- Perform the equip only if a better (or new) item was found
-    if best_weapon and best_weapon ~= current_weapon then 
-        inv:Equip(best_weapon) 
+    -- Apply the best gear found
+    if best_weapon and best_weapon ~= current_weapon then inv:Equip(best_weapon) end
+    if best_armor and best_armor ~= current_armor then inv:Equip(best_armor) end
+    if best_helmet and best_helmet ~= current_helmet then inv:Equip(best_helmet) end
+end
+
+-- =========================================================
+-- OCEAN RESCUE SYSTEM
+-- Prevents the companion from permanently dying if they fall off a boat.
+-- Extracted to file-level to save memory per instance.
+-- =========================================================
+
+local function OnWashAshore(inst)
+    if inst._ocean_rescue_task ~= nil then
+        inst._ocean_rescue_task:Cancel()
+        inst._ocean_rescue_task = nil
     end
-    if best_armor and best_armor ~= current_armor then 
-        inv:Equip(best_armor) 
+
+    inst:RemoveTag("INLIMBO")
+    inst.entity:Show()
+    inst.Physics:SetActive(true)
+
+    if inst.brain ~= nil then inst.brain:Start() end
+    
+    -- 'washashore' is a native StateGraph state used by the base game
+    if inst.sg ~= nil then inst.sg:GoToState("washashore") end
+end
+
+local function RescueFromOcean(inst)
+    if inst.components.health and inst.components.health:IsDead() then return end
+
+    -- Temporarily make invincible to prevent dying from random ocean damage during animation
+    if inst.components.health then inst.components.health:SetInvincible(true) end
+
+    if inst.components.locomotor then inst.components.locomotor:Stop() end
+    if inst.brain then inst.brain:Stop() end
+    inst:ClearBufferedAction()
+
+    -- Play sinking animation if the StateGraph supports it
+    if inst.sg then
+        if inst.sg:HasState("sink") then
+            inst.sg:GoToState("sink")
+        else
+            inst.sg:GoToState("hit")
+        end
     end
-    if best_helmet and best_helmet ~= current_helmet then 
-        inv:Equip(best_helmet) 
+
+    local x, y, z = inst.Transform:GetWorldPosition()
+    local splash = SpawnPrefab("splash_ocean")
+    if splash then splash.Transform:SetPosition(x, y, z) end
+
+    inst:DoTaskInTime(1, function()
+        if inst.components.health then
+            inst.components.health:SetInvincible(false)
+            
+            -- Critical variable: Penalty damage for drowning. 
+            -- Change -20 to adjust how punishing falling off a boat is.
+            inst.components.health:DoDelta(WILTO_STATS.DROWN_DAMAGE, false, "drowning")
+        end
+
+        if inst.components.health:IsDead() then return end
+
+        -- Move entity to Limbo so it cannot be attacked or interact while "drowning"
+        inst:AddTag("INLIMBO")
+        inst.entity:Hide()
+        inst.Physics:SetActive(false)
+
+        local leader = inst.components.follower and inst.components.follower:GetLeader()
+
+        if inst._ocean_rescue_task ~= nil then
+            inst._ocean_rescue_task:Cancel()
+        end
+
+        -- Periodically check if the leader is on safe ground to teleport Wilto
+        inst._ocean_rescue_task = inst:DoPeriodicTask(0.5, function()
+            if leader ~= nil and leader:IsValid() and leader:IsOnValidGround() then
+                local lx, ly, lz = leader.Transform:GetWorldPosition()
+                inst.Transform:SetPosition(lx, ly, lz)
+                OnWashAshore(inst)
+            end
+        end)
+    end)
+end
+
+-- =========================================================
+-- EVENT HANDLERS (Extracted to save memory per instance)
+-- =========================================================
+
+local function OnLeaderDespawn(inst)
+    if inst.components.health and not inst.components.health:IsDead() then
+        if inst.components.talker then 
+            inst.components.talker:Say(GetRandomItem(speech.LEADER_DESPAWN)) 
+        end
+        inst.components.health:Kill()
+    end
+end
+
+local function OnGotNewItem(inst, data)
+    if data.item ~= nil and data.item.components.equippable ~= nil then
+        inst:DoTaskInTime(0, function()
+            -- Ensure item still exists and belongs to Wilto
+            if not (data.item:IsValid() and data.item.components.inventoryitem and data.item.components.inventoryitem.owner == inst) then
+                return
+            end
+            
+            -- Reject items that cannot go in containers (e.g. active traps)
+            if data.item.components.inventoryitem.cangoincontainer == false then
+                inst.components.inventory:DropItem(data.item, true, true)
+                return
+            end
+
+            EquipBestGear(inst)
+            inst.SoundEmitter:PlaySound("dontstarve/characters/wilson/equip_item")
+        end)
+    end
+end
+
+local function OnGearBroke(inst)
+    inst:DoTaskInTime(0.2, EquipBestGear)
+end
+
+local function OnNewTarget(inst, data)
+    if inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false then
+        inst:DoTaskInTime(0, function() 
+            if inst.components.combat then inst.components.combat:DropTarget() end 
+        end)
+        return
+    end
+    -- Equip weapons immediately when acquiring a target
+    if data.target ~= nil then EquipBestGear(inst) end
+end
+
+local function OnWiltoDeath(inst)
+    if inst.components.inventory ~= nil then
+        inst.components.inventory:DropEverything(true)
+    end
+    
+    -- Penalize leader sanity on death
+    local leader = inst.components.follower:GetLeader()
+    if leader ~= nil and leader.components.sanity ~= nil then
+        local current_sanity = leader.components.sanity.current
+        leader.components.sanity:DoDelta(-(current_sanity * 0.5))
+        
+        if leader.components.talker ~= nil then
+            leader.components.talker:Say(GetRandomItem(speech.LEADER_DIED))
+        end
+    end
+end
+
+local function OnStartFollowing(inst, data)
+    if inst._on_leader_despawn ~= nil and inst._old_leader ~= nil then
+        inst:RemoveEventCallback("ms_playerreroll", inst._on_leader_despawn, inst._old_leader)
+        inst:RemoveEventCallback("ms_playerdespawn", inst._on_leader_despawn, inst._old_leader)
+        inst._on_leader_despawn = nil
+    end
+    
+    if data.leader ~= nil then
+        inst._old_leader = data.leader
+        inst._on_leader_despawn = function() OnLeaderDespawn(inst) end
+        inst:ListenForEvent("ms_playerreroll", inst._on_leader_despawn, data.leader)
+        inst:ListenForEvent("ms_playerdespawn", inst._on_leader_despawn, data.leader)
+    end
+end
+
+local function OnCustomSink(inst)
+    if inst.components.health and inst.components.health:IsDead() then return end
+
+    inst.components.health:DoDelta(WILTO_STATS.SINK_DAMAGE, false, "drowning")
+    if inst.components.health:IsDead() then return end
+
+    inst:AddTag("INLIMBO")
+    inst.entity:Hide()
+    inst.Physics:SetActive(false)
+    
+    if inst.components.locomotor then inst.components.locomotor:Stop() end
+    if inst.brain then inst.brain:Stop() end
+    inst:ClearBufferedAction()
+
+    local leader = inst.components.follower and inst.components.follower:GetLeader()
+
+    if inst._ocean_rescue_task ~= nil then inst._ocean_rescue_task:Cancel() end
+
+    inst._ocean_rescue_task = inst:DoPeriodicTask(0.5, function()
+        if leader ~= nil and leader:IsValid() and leader:IsOnValidGround() then
+            local lx, ly, lz = leader.Transform:GetWorldPosition()
+            inst.Transform:SetPosition(lx, ly, lz)
+            OnWashAshore(inst) -- Assumes OnWashAshore is defined above this block
+        end
+    end)
+end
+
+local function OnAmbientTick(inst)
+    if not inst.sg:HasStateTag("busy") and not inst.components.combat:HasTarget() then
+        if math.random() < 0.3 and inst.components.talker then
+            inst.components.talker:Say(GetRandomItem(speech.AMBIENT))
+        end
     end
 end
 
 -- =========================================================
--- CREACIÓN DEL NPC PRINCIPAL
+-- CORE PREFAB INITIALIZATION
 -- =========================================================
+
 local function wiltofn()
     local inst = CreateEntity()
 
@@ -292,6 +464,7 @@ local function wiltofn()
     inst.entity:AddAnimState()
     inst.entity:AddSoundEmitter()
     inst.entity:AddNetwork()
+    
     inst.net_heal_tokens = net_smallbyte(inst.GUID, "wilto.heal_tokens")
     inst.net_heal_points = net_smallbyte(inst.GUID, "wilto.heal_points")
 
@@ -301,12 +474,8 @@ local function wiltofn()
     inst.AnimState:SetBank("wilson")
     inst.AnimState:SetBuild("wilto") 
     inst.AnimState:PlayAnimation("idle_loop", true)
-    --inst.AnimState:AddOverrideBuild("wurt_peruse")
-    --inst.AnimState:AddOverrideBuild("player_basic")     -- Core human animations
-    --inst.AnimState:AddOverrideBuild("player_idles")     -- Idle animations (contains yawn)
-    --inst.AnimState:AddOverrideBuild("player_actions")   -- Action animations (contains wave)
-    inst.AnimState:AddOverrideBuild("player_emotes")    -- Standard emotes
-    inst.AnimState:AddOverrideBuild("player_emotesxl")  -- Extra large emotes (contains happycheer)
+    inst.AnimState:AddOverrideBuild("player_emotes")    
+    inst.AnimState:AddOverrideBuild("player_emotesxl")  
     inst.AnimState:AddOverrideBuild("emote_laugh")
 
     inst.AnimState:Hide("ARM_carry")
@@ -316,23 +485,21 @@ local function wiltofn()
     inst:AddTag("character")
     inst:AddTag("trader") 
     inst:AddTag("alltrader") 
-    inst:AddTag("wilto_companion") -- Etiqueta para reconocerlo al hacer click
+    inst:AddTag("wilto_companion") 
     inst:AddTag("companion") 
     inst:AddTag("NOBLOCK") 
     
-    -- MEMORIA BASE
+    -- Base Memory Setup
     inst.wilto_toggles = { pickup = true, chop = true, mine = true, dig = true, fight = true, give = true, harvest = true }
     inst.wilto_heal_points = 0
     inst.wilto_heal_tokens = 0
 
-    -- GUARDAR MEMORIA EN EL MUNDO
     inst.OnSave = function(inst, data)
         if inst.wilto_toggles ~= nil then data.wilto_toggles = inst.wilto_toggles end
         data.wilto_heal_points = inst.wilto_heal_points
         data.wilto_heal_tokens = inst.wilto_heal_tokens
     end
 
-    -- CARGAR MEMORIA AL ENTRAR AL MUNDO
     inst.OnLoad = function(inst, data)
         if data ~= nil then 
             if data.wilto_toggles ~= nil then inst.wilto_toggles = data.wilto_toggles end
@@ -341,14 +508,15 @@ local function wiltofn()
         end
     end
 
-    -- Tarea periódica: Cada 3 segundos revisa su inventario para hacer medicinas
+    -- Healing item processor
     inst:DoPeriodicTask(3, ProcessHealingItems)
     
     inst:AddComponent("talker")
     inst.components.talker.fontsize = 35
-    inst.components.talker.font = TALKINGFONT -- Sin el punto al final
+    inst.components.talker.font = TALKINGFONT 
     inst.components.talker.offset = Vector3(0, -400, 0)
-    inst.components.talker:MakeChatter() -- ¡VITAL para NPCs en multijugador!
+    inst.components.talker:MakeChatter() 
+    
     inst.entity:SetPristine()
 
     if not TheWorld.ismastersim then
@@ -356,60 +524,52 @@ local function wiltofn()
     end
 
     inst:AddComponent("locomotor")
-    inst.components.locomotor.runspeed = 8.5
-    inst.components.locomotor.walkspeed = 5.5
-    
-    -- [NUEVO] Permite que el motor busque caminos hacia plataformas (barcos)
+    inst.components.locomotor.runspeed = WILTO_STATS.RUN_SPEED
+    inst.components.locomotor.walkspeed = WILTO_STATS.WALK_SPEED
     inst.components.locomotor:SetAllowPlatformHopping(true)
 
-    -- [NUEVO] El componente que maneja la física y animación de saltar
     inst:AddComponent("embarker")
     inst.components.embarker.embark_speed = inst.components.locomotor.runspeed
-    inst.components.embarker.antigravity = true -- Evita que se caiga al agua durante el salto
+    inst.components.embarker.antigravity = true 
+
+    inst:AddComponent("drownable")
 
     inst:AddComponent("health")
-    inst.components.health:SetMaxHealth(120)
-    inst.components.health:StartRegen(3, 10)
+    inst.components.health:SetMaxHealth(WILTO_STATS.MAX_HEALTH)
+    inst.components.health:StartRegen(WILTO_STATS.REGEN_AMOUNT, WILTO_STATS.REGEN_PERIOD)
+        
     MakeMediumBurnableCharacter(inst, "torso")
     MakeMediumFreezableCharacter(inst, "torso")
-    inst.components.freezable:SetResistance(2) -- Requiere el doble de golpes gélidos para congelarlo
-    inst.components.freezable:SetDefaultWearOffTime(1) -- Si lo congelan, se derrite en 1 segundo
+    inst.components.freezable:SetResistance(2) 
+    inst.components.freezable:SetDefaultWearOffTime(1) 
 
     inst:AddComponent("combat")
-    inst.components.combat:SetDefaultDamage(15)
-    inst.components.combat:SetAttackPeriod(0.50)
+    inst.components.combat:SetDefaultDamage(WILTO_STATS.BASE_DAMAGE)
+    inst.components.combat:SetAttackPeriod(WILTO_STATS.ATTACK_PERIOD)
     inst.components.combat:SetRetargetFunction(1, wiltoretargetfn)
     inst.components.combat:SetKeepTargetFunction(wiltokeeptargetfn)
     inst.ShouldFleeForSurvival = ShouldFleeForSurvival
     
-    -- =========================================================
-    -- COMBAT INTERCEPTOR: TANKING, PERFECT DODGE & ANTI-STUNLOCK
-    -- =========================================================
+    -- Combat Interceptor: Tanking, Perfect Dodge & Anti-Stunlock
     local old_GetAttacked = inst.components.combat.GetAttacked
-    
     inst.components.combat.GetAttacked = function(self, attacker, damage, weapon, stimuli)
         local reduced_damage = damage * 0.5 
         local time_now = GetTime()
 
-        -- STUNLOCK BREAKER: Check if Wilto is already in pain/busy
         if inst.sg:HasStateTag("hit") or inst.sg:HasStateTag("busy") then
             inst._stunlock_hits = (inst._stunlock_hits or 0) + 1
         else
             inst._stunlock_hits = 0
         end
 
-        -- If Wilto receives a second hit while already stunned, force an emergency breakout
         if inst._stunlock_hits >= 2 then
             inst._stunlock_hits = 0
-            -- Pass the attacker to the StateGraph so Wilto knows which direction to jump away from
             inst.sg:GoToState("perfect_dodge", attacker)
-            return true -- Negate this hit's damage completely
+            return true 
         end
 
-        -- REGULAR PERFECT DODGE (25% chance, 5s cooldown, only when not busy)
         if not inst.sg:HasStateTag("busy") and 
            (inst._last_dodge_time == nil or (time_now - inst._last_dodge_time > 2)) then
-            
             if math.random() < 0.25 then
                 inst._last_dodge_time = time_now
                 inst.sg:GoToState("perfect_dodge", attacker)
@@ -426,206 +586,62 @@ local function wiltofn()
     inst:AddComponent("inventory")
     inst.components.inventory.maxslots = 35
 
-    -- =========================================================
-    -- TRADER COMPONENT SETUP (ITEM TRADING SYSTEM)
-    -- =========================================================
+    -- Trader Component Setup
     inst:AddComponent("trader")
-    inst.components.trader.acceptnontradable = true -- WX-78's magic line! Accepts non-tradable items.
-    inst.components.trader.deleteitemonaccept = false -- Keeps the item so it can be handled or stored.
+    inst.components.trader.acceptnontradable = true 
+    inst.components.trader.deleteitemonaccept = false
     
     inst.components.trader:SetAcceptTest(function(inst, item, giver)
-        -- Prevent items that break the game logic (like Chester's Eye Bone or Star-sky)
         if item.components.inventoryitem and item.components.inventoryitem.cangoincontainer == false then
             return false
         end
-        -- Return true allows Wilto to accept ANY valid item given by hand
+        if inst.components.inventory ~= nil then
+            if not inst.components.inventory:IsFull() then return true end
+            if item.components.stackable ~= nil then
+                local has_stack_room = inst.components.inventory:FindItem(function(v)
+                    return v.prefab == item.prefab and not v.components.stackable:IsFull()
+                end)
+                if has_stack_room ~= nil then return true end
+            end
+            return false
+        end
         return true
     end)
 
-    -- Declared inside the scope but outside the callback to prevent memory allocations per trade
-    local ITEM_RECEIVED_LINES = {
-        "I'll put this to good use...!",
-        "Thank you! I'll hold onto this for now.",
-        "Appreciate it! This will definitely come in handy!",
-        "For me? Thanks...!",
-        "Alright, let's see what we can do with this...",
-        "Safe with me! Thanks for the gear.",
-        "This looks useful. I'll make sure it doesn't go to waste!"
-    }
+    inst.components.trader.onrefuse = function(inst, giver, item)
+        if inst.components.talker then
+            inst.components.talker:Say(GetRandomItem(speech.INVENTORY_FULL))
+        end
+    end
 
-    -- FIX: Encapsulate the dialogue logic inside the native component callback.
-    -- This function triggers automatically EVERY TIME an item is successfully traded.
-    -- FIX: Encapsulate the dialogue logic inside the native component callback.
     inst.components.trader.onaccept = function(inst, giver, item)
         if inst.components.talker then
-            local chosen_line = GetRandomItem(ITEM_RECEIVED_LINES)
-            inst.components.talker:Say(chosen_line)
+            inst.components.talker:Say(GetRandomItem(speech.ITEM_RECEIVED))
         end
-
-        -- REMOVED: inst.components.inventory:GiveItem(item)
-        -- The native 'trader' component already handles the inventory transfer 
-        -- automatically because deleteitemonaccept is false. 
-        -- Forcing it a second time causes stackable items to paradox-merge and crash.
     end
 
     inst:AddComponent("inspectable")
-    -- =========================================================
-    -- NOMBRE Y DIÁLOGOS
-    -- =========================================================
+    
     inst:AddComponent("named")
-    inst.components.named.possiblenames = { "Wilto" } -- Pon aquí el nombre que quieras
+    inst.components.named.possiblenames = { "Wilto" } 
 
-
-    -- Ignorador temporal para no recoger cosas que acaba de tirar
     inst._ignored_items = {}
     setmetatable(inst._ignored_items, {__mode = "k"})
 
-    -- When entering combat, evaluate and draw the best weapon available
-    inst:ListenForEvent("newcombattarget", function(inst, data)
-        if inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false then
-            inst:DoTaskInTime(0, function() 
-                if inst.components.combat then inst.components.combat:DropTarget() end 
-            end)
-            return
-        end
-        
-        if data.target ~= nil then
-            EquipBestGear(inst)
-        end
-    end)
-
-    -- Smart inventory management when receiving items
-    inst:ListenForEvent("gotnewitem", function(inst, data)
-        if data.item ~= nil and data.item.components.equippable ~= nil then
-            inst:DoTaskInTime(0, function()
-                if not (data.item:IsValid() and data.item.components.inventoryitem and data.item.components.inventoryitem.owner == inst) then
-                    return
-                end
-                
-                -- Reject items that cannot go in containers (like Chester's Eyebone)
-                if data.item.components.inventoryitem.cangoincontainer == false then
-                    inst.components.inventory:DropItem(data.item, true, true)
-                    return
-                end
-
-                -- Trigger the smart equip logic to compare the new item with the current gear
-                EquipBestGear(inst)
-                inst.SoundEmitter:PlaySound("dontstarve/characters/wilson/equip_item")
-            end)
-        end
-    end)
-
     -- =========================================================
-    -- REPLACEMENT LOGIC (When items break)
+    -- EVENT LISTENERS (Clean & Optimized)
     -- =========================================================
+    inst:ListenForEvent("on_fall_in_ocean", RescueFromOcean)
+    inst:ListenForEvent("wilto_custom_sink", OnCustomSink)
+    inst:ListenForEvent("newcombattarget", OnNewTarget)
+    inst:ListenForEvent("gotnewitem", OnGotNewItem)
+    inst:ListenForEvent("armorbroke", OnGearBroke)
+    inst:ListenForEvent("weaponbroke", OnGearBroke)
+    inst:ListenForEvent("death", OnWiltoDeath)
+    inst:ListenForEvent("startfollowing", OnStartFollowing)
 
-    -- Triggered specifically when an armor piece reaches 0 condition and shatters
-    inst:ListenForEvent("armorbroke", function(inst)
-        inst:DoTaskInTime(0.2, EquipBestGear)
-    end)
-
-    -- Triggered specifically when a weapon reaches 0 condition and breaks
-    inst:ListenForEvent("weaponbroke", function(inst)
-        inst:DoTaskInTime(0.2, EquipBestGear)
-    end)
-
-    -- Extra safety: Check equipment when performing an attack or working
-    -- This ensures he never swings with bare hands if he has a weapon available
-    local function CheckGearBeforeAction(inst)
-        local weapon = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.HANDS)
-        if weapon == nil then
-            EquipBestGear(inst)
-        end
-    end
-
-    inst:ListenForEvent("onattackother", CheckGearBeforeAction)
-    inst:ListenForEvent("working", CheckGearBeforeAction)
-
-    inst:ListenForEvent("death", function(inst)
-        -- 1. Suelta todo su equipo
-        if inst.components.inventory ~= nil then
-            inst.components.inventory:DropEverything(true)
-        end
-        
-        -- 2. IMPACTO EMOCIONAL: Wiltolion pierde el 50% de su cordura actual
-        local leader = inst.components.follower:GetLeader()
-        if leader ~= nil and leader.components.sanity ~= nil then
-            local current_sanity = leader.components.sanity.current
-            
-            -- Le restamos exactamente la mitad de lo que le quede
-            leader.components.sanity:DoDelta(-(current_sanity * 0.5))
-            
-            -- ¡Un pequeño grito de dolor de Wiltolion para darle dramatismo!
-            if leader.components.talker ~= nil then
-                leader.components.talker:Say("I really didn't want to see that at all!")
-            end
-        end
-    end)
-
--- =========================================================
-    -- VÍNCULO VITAL (Simple y Letal)
-    -- =========================================================
-    inst:ListenForEvent("startfollowing", function(inst, data)
-        -- Limpieza de seguridad por si cambia de líder
-        if inst._on_leader_despawn ~= nil and inst._old_leader ~= nil then
-            inst:RemoveEventCallback("ms_playerreroll", inst._on_leader_despawn, inst._old_leader)
-            inst:RemoveEventCallback("ms_playerdespawn", inst._on_leader_despawn, inst._old_leader)
-            inst._on_leader_despawn = nil
-        end
-        
-        if data.leader ~= nil then
-            inst._old_leader = data.leader
-            
-            -- La acción: Matarlo incondicionalmente
-            inst._on_leader_despawn = function()
-                if inst.components.health and not inst.components.health:IsDead() then
-                    if inst.components.talker then inst.components.talker:Say("Goodbye...!") end
-                    inst.components.health:Kill()
-                end
-            end
-            
-            -- 1. Disparador: Usar el Portal Celestial para cambiar de personaje
-            inst:ListenForEvent("ms_playerreroll", inst._on_leader_despawn, data.leader)
-            
-            -- 2. Disparador: Forzar el despawn (Comando c_despawn)
-            inst:ListenForEvent("ms_playerdespawn", inst._on_leader_despawn, data.leader)
-        end
-    end)
-
-    inst:DoPeriodicTask(20 + math.random() * 20, function()
-        -- Solo habla si no está en combate y no está haciendo una acción
-        if not inst.sg:HasStateTag("busy") and not inst.components.combat:HasTarget() then
-            -- Solo habla con un 30% de probabilidad para no ser pesado
-            if math.random() < 0.3 then
-                local ambient_lines = {
-                    -- Exploración y timidez
-                    "This place is... quite big.",
-                    "Are you sure we're going the right way?",
-                    "It's a bit scary out here, but I trust you.",
-                    "Do you think it will rain?",
-                    "What was that noise...?",
-                    "I hope we don't run into anything too big.",
-                    "Is it getting darker, or is it just me?",
-                    
-                    -- Lealtad y cariño hacia el jugador
-                    "I'll follow your lead.",
-                    "I'm glad I'm not alone here.",
-                    "Your light makes me feel safe.",
-                    "I'll try my best to protect you.",
-                    "You don't have to carry all the weight yourself, you know.",
-                    
-                    -- Melancolía y su naturaleza como "Eco"
-                    "Do you ever feel like you've been here before?",
-                    "Sometimes I feel like I'm forgetting something important...",
-                    "It's peaceful when it's quiet like this.",
-                    "The world is so strange... but it's okay if we are together.",
-                }
-                if inst.components.talker then
-                    inst.components.talker:Say(ambient_lines[math.random(#ambient_lines)])
-                end
-            end
-        end
-    end)
+    -- Ambient chatter tick
+    inst:DoPeriodicTask(20 + math.random() * 20, OnAmbientTick)
 
     inst:SetBrain(brain)
     inst:SetStateGraph("SGwiltolionwilto")
@@ -634,16 +650,14 @@ local function wiltofn()
 end
 
 -- =========================================================
--- CONSTRUCTOR Y REEMBOLSO DINÁMICO (Seguro para Servidores)
+-- BUILDER & REFUND DYNAMICS (Server-Safe)
 -- =========================================================
 local function onwiltobuilt(inst, builder)
     
-    -- 1. BUSCAMOS A WILTO A MANO PARA EVITAR CRASHEOS
     local has_wilto = false
     if builder.components.petleash ~= nil then
         local pets = builder.components.petleash:GetPets()
         if pets ~= nil then
-            -- Revisamos una por una las mascotas que te siguen
             for pet, _ in pairs(pets) do
                 if pet.prefab == "wiltolion_wilto" then
                     has_wilto = true
@@ -653,7 +667,6 @@ local function onwiltobuilt(inst, builder)
         end
     end
 
-    -- 2. SI YA EXISTE, REEMBOLSAMOS MATERIALES
     if has_wilto then
         if builder.components.talker then
             builder.components.talker:Say("He is already here with me.")
@@ -689,7 +702,6 @@ local function onwiltobuilt(inst, builder)
         return
     end
 
-    -- 3. SI NO EXISTE, LO INVOCAMOS NORMALMENTE
     local theta = math.random() * 2 * PI
     local pt = builder:GetPosition()
     local offset = FindWalkableOffset(pt, theta, 3, 12, true, true)

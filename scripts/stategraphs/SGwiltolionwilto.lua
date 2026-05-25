@@ -100,6 +100,20 @@ local events =
             inst.sg:GoToState("greet", data)
         end
     end),
+
+    -- Catch the native sinking event from the drownable component
+    EventHandler("onsink", function(inst, data)
+        if not inst.sg:HasStateTag("drowning") then
+            inst.sg:GoToState("sink", data)
+        end
+    end),
+
+    -- Catch the native wash ashore event after Klei teleports the entity
+    EventHandler("washashore", function(inst)
+        if not inst.sg:HasStateTag("busy") then
+            inst.sg:GoToState("washashore")
+        end
+    end),
 }
 
 local GREETING_ANIMS = {
@@ -907,6 +921,55 @@ local states =
 			inst.Physics:Stop()
 		end,
 	},
+
+    State{
+        name = "sink",
+        tags = { "busy", "drowning" },
+
+        onenter = function(inst)
+            if inst.components.locomotor ~= nil then
+                inst.components.locomotor:Stop()
+            end
+            
+            inst.AnimState:PlayAnimation("sink") 
+            inst:ClearBufferedAction()
+        end,
+
+        timeline =
+        {
+            TimeEvent(20 * FRAMES, function(inst)
+                -- THE HIJACK: Instead of calling drownable:OnFallInOcean(),
+                -- we push our own event to bypass item dropping and shore-searching.
+                inst:PushEvent("wilto_custom_sink")
+            end),
+        },
+    },
+
+    State{
+        name = "washashore",
+        tags = { "busy", "wakeup", "nomorph" },
+
+        onenter = function(inst)
+            if inst.components.locomotor ~= nil then
+                inst.components.locomotor:Stop()
+            end
+            
+            -- Klei usually uses "wakeup" or "hit" for the recovery animation
+            inst.AnimState:PlayAnimation("wakeup")
+            
+            if inst.components.talker then
+                inst.components.talker:Say("I swallowed so much seawater...")
+            end
+        end,
+
+        events =
+        {
+            -- Return to idle once the recovery animation is complete
+            EventHandler("animover", function(inst)
+                inst.sg:GoToState("idle")
+            end),
+        },
+    },
 }
 
 CommonStates.AddHopStates(states, true, { pre = "boat_jump_pre", loop = "boat_jump_loop", pst = "boat_jump_pst" })

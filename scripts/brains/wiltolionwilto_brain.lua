@@ -135,35 +135,53 @@ local function FilterAnyWorkableTargets(targets, inst)
 end
 
 -- =========================================================
--- WORK ROUTINES - REFACTORED
+-- WORK ROUTINES - REFACTORED (STRICT CACHE VALIDATION)
 -- =========================================================
 local function FindAnyEntityToWorkActionsOn(inst)
+    -- 1. STATEGRAPH GUARD: Absolutely essential.
+    -- Prevents the brain from spamming the cache or scanning while Wilto is actively swinging a tool.
+    if inst.sg:HasStateTag("busy") then return nil end
+
     local leader = GetLeader(inst)
     if leader == nil then return nil end
 
-    -- 1. CACHE SYSTEM: Fast bypass to maintain work actions smoothly
+    -- 2. STRICT CACHE SYSTEM: Fast bypass, but heavily safeguarded
     if inst._work_target ~= nil then
-        if inst._work_target:IsValid() and inst._work_target.components.workable ~= nil and inst._work_target.components.workable:CanBeWorked() then
-            
-            -- SAFEGUARD: Check if the watchdog recently blacklisted this exact cached target
-            if inst._blacklisted_items and inst._blacklisted_items[inst._work_target] and inst._blacklisted_items[inst._work_target] > GetTime() then
-                inst._work_target = nil
+        local target = inst._work_target
+        
+        -- PROACTIVE SAFEGUARD: Check if the cached target is still physically safe
+        local is_safe_cache = target:IsValid() and 
+                              target.components.workable ~= nil and 
+                              target.components.workable:CanBeWorked() and
+                              target:IsOnValidGround()
+                              
+        -- Only call IsEntityBlacklisted if the function exists and is valid
+        if is_safe_cache and type(IsEntityBlacklisted) == "function" and IsEntityBlacklisted(inst, target) then
+            is_safe_cache = false
+        end
+
+        -- Fire validation: The tree might have caught fire while Wilto was walking towards it
+        if is_safe_cache and target.components.burnable ~= nil and (target.components.burnable:IsBurning() or target.components.burnable:IsSmoldering()) then
+            is_safe_cache = false
+        end
+
+        if is_safe_cache then
+            local action, tool = PickValidActionFrom(target, inst)
+            if action ~= nil then
+                return BufferedAction(inst, target, action, tool)
             else
-                local action, tool = PickValidActionFrom(inst._work_target, inst)
-                if action ~= nil then
-                    return BufferedAction(inst, inst._work_target, action, tool)
-                else
-                    -- FIX: Target is valid, but the tool broke or the player toggled the action off.
-                    -- We MUST clear the cache immediately to prevent an infinite null-loop freeze.
-                    inst._work_target = nil
-                end
+                -- Tool broke or action was toggled off mid-walk
+                inst._work_target = nil
             end
         else
+            -- THE CHAINING FIX: Target is no longer safe (e.g., tree fell down).
+            -- Wipe the cache AND force the throttle to zero to guarantee an instant scan on this exact tick.
             inst._work_target = nil
+            inst._next_work_scan = nil 
         end
     end
 
-    -- 2. THROTTLING SYSTEM: Only scan when the timer allows it
+    -- 3. THROTTLING SYSTEM: Only scan when the timer allows it
     local t = GetTime()
     if inst._next_work_scan ~= nil and t < inst._next_work_scan then
         return nil
@@ -177,7 +195,7 @@ local function FindAnyEntityToWorkActionsOn(inst)
     -- Scan around Wilto first
     local target = FilterAnyWorkableTargets(TheSim:FindEntities(x, y, z, 25, nil, TOWORK_CANT_TAGS, ANY_TOWORK_MUSTONE_TAGS), inst)
     
-    -- Scan around Leader if nothing found
+    -- Scan around Leader if nothing found around Wilto
     if target == nil then
         local lx, ly, lz = leader.Transform:GetWorldPosition()
         target = FilterAnyWorkableTargets(TheSim:FindEntities(lx, ly, lz, 25, nil, TOWORK_CANT_TAGS, ANY_TOWORK_MUSTONE_TAGS), inst)
@@ -186,8 +204,9 @@ local function FindAnyEntityToWorkActionsOn(inst)
     if target ~= nil then
         local action, tool = PickValidActionFrom(target, inst)
         if action ~= nil then
-            inst._work_target = target -- Save target into cache
-            inst._next_work_scan = nil -- Clear scan penalty so he works fluidly
+            inst._work_target = target 
+            -- Clear the scan penalty immediately since we found valid work
+            inst._next_work_scan = nil 
             return BufferedAction(inst, target, action, tool)
         end
     end
@@ -212,9 +231,12 @@ end
 -- AUTO-SORTING SYSTEM - FULLY OPTIMIZED (THROTTLED)
 -- =========================================================
 local function FindChestToStoreItem(inst)
-    if inst.wilto_toggles ~= nil and (inst.wilto_toggles.pickup == false or inst.wilto_toggles.give == false) then
+    -- Check if the give toggle is explicitly disabled
+    if inst.wilto_toggles ~= nil and inst.wilto_toggles.give == false then
         return nil
     end
+
+    -- [ The rest of your chest scanning logic goes here ]
 
     local inv = inst.components.inventory
     if inv == nil or inv.itemslots == nil or next(inv.itemslots) == nil then
@@ -277,26 +299,38 @@ local function FindChestToStoreItem(inst)
 end
 
 -- =========================================================
--- RESOURCE GATHERING - REFACTORED
+-- RESOURCE GATHERING - REFACTORED (STRICT CACHE VALIDATION)
 -- =========================================================
 local function FindResourceToPickup(inst)
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.pickup == false then 
         return nil 
     end
 
-    if inst.components.inventory and inst.components.inventory:IsFull() then
+    if inst.components.inventory ~= nil and inst.components.inventory:IsFull() then
         return nil
     end
 
-    -- 1. CACHE SYSTEM: Persist the target until it is held or destroyed
+    -- 1. STRICT CACHE SYSTEM
     if inst._pickup_target ~= nil then
-        if inst._pickup_target:IsValid() and 
-           inst._pickup_target.components.inventoryitem ~= nil and 
-           inst._pickup_target.components.inventoryitem.canbepickedup and 
-           not inst._pickup_target.components.inventoryitem:IsHeld() then
-            return BufferedAction(inst, inst._pickup_target, ACTIONS.PICKUP)
+        local target = inst._pickup_target
+        
+        -- PROACTIVE SAFEGUARD: Ensure the item didn't drop into water, get picked up by someone else, or get blacklisted
+        local is_safe_cache = target:IsValid() and 
+                              target.components.inventoryitem ~= nil and 
+                              target.components.inventoryitem.canbepickedup and 
+                              not target.components.inventoryitem:IsHeld() and
+                              target:IsOnValidGround() and
+                              not IsEntityBlacklisted(inst, target)
+
+        -- Fire validation for items that catch fire on the ground
+        if is_safe_cache and target.components.burnable ~= nil and (target.components.burnable:IsBurning() or target.components.burnable:IsSmoldering()) then
+            is_safe_cache = false
+        end
+
+        if is_safe_cache then
+            return BufferedAction(inst, target, ACTIONS.PICKUP)
         else
-            inst._pickup_target = nil -- Clears cache once successfully picked up
+            inst._pickup_target = nil -- Wipe invalid cache immediately
         end
     end
 
@@ -321,7 +355,7 @@ local function FindResourceToPickup(inst)
     local ignorethese = leader._brain_pickup_ignorethese or {}
 
     for _, item in ipairs(ents) do
-        local is_blacklisted = inst._blacklisted_items[item] ~= nil and t < inst._blacklisted_items[item]
+        local is_blacklisted = IsEntityBlacklisted(inst, item)
         
         if not is_blacklisted and item:IsValid() and 
            not ignorethese[item] and 
@@ -333,7 +367,7 @@ local function FindResourceToPickup(inst)
            not item:HasTag("trap") and 
            item:GetDistanceSqToInst(leader) < 400 then
             
-            inst._pickup_target = item -- Store target in cache
+            inst._pickup_target = item 
             inst._next_pickup_scan = nil 
             return BufferedAction(inst, item, ACTIONS.PICKUP)
         end
@@ -446,34 +480,84 @@ local function WatchingMinigame(inst)
 end
 
 -- =========================================================
--- RECOLECCIÓN DE PLANTAS (Hierba, Palitos, Bayas, etc.)
+-- PLANT HARVESTING (Grass, Twigs, etc.) - REFACTORED
 -- =========================================================
-local PICK_CANT_TAGS = { "INLIMBO", "NOCLICK", "fire", "smolder", "catchable", "thorny", "flower", "crop","berrybush","crop" }
+
+-- 1. TAG AND PREFAB FILTERS
+local PICK_CANT_TAGS = { "INLIMBO", "NOCLICK", "fire", "smolder", "catchable", "thorny", "flower", "crop", "berrybush" }
+
+local IGNORED_PREFABS = {
+    berrybush = true,
+    berrybush2 = true,
+    berrybush_juicy = true,
+}
+
+-- Distance squared. 8 = 2 physical units of personal space.
+local COURTESY_RADIUS_SQ = 8 
 
 local function FindPlantToPick(inst)
-    if inst.sg:HasStateTag("busy") then return nil end
+    if inst.sg ~= nil and inst.sg:HasStateTag("busy") then return nil end
     
-    -- Control mediante tu interfaz (Adventure Journal)
+    -- UI Toggle control
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.harvest == false then return nil end
 
-    -- Para evitar que llene el suelo de objetos si no tiene espacio, limitamos su inventario
+    -- Inventory limit safeguard
     local inv = inst.components.inventory
     if inv ~= nil and inv:IsFull() then return nil end
 
     local leader = GetLeader(inst)
     if not leader then return nil end
 
+    -- 2. STRICT CACHE SYSTEM (Proactive space validation)
+    if inst._pickup_plant_target ~= nil then
+        local target = inst._pickup_plant_target
+        
+        local is_safe_cache = target:IsValid() and 
+                              not IsEntityBlacklisted(inst, target) and
+                              target.components.pickable ~= nil and 
+                              target.components.pickable:CanBePicked() and 
+                              target.components.pickable.caninteractwith
+
+        -- COURTESY VALIDATION: Did the player walk too close to Wilto's target?
+        if is_safe_cache and target:GetDistanceSqToInst(leader) < COURTESY_RADIUS_SQ then
+            is_safe_cache = false
+        end
+
+        if is_safe_cache then
+            return BufferedAction(inst, target, ACTIONS.PICK)
+        else
+            inst._pickup_plant_target = nil -- Target compromised, wipe cache
+        end
+    end
+
+    -- 3. CPU THROTTLING (Prevent scanning 30 times a second if no plants are nearby)
+    local t = GetTime()
+    if inst._next_pick_scan ~= nil and t < inst._next_pick_scan then
+        return nil
+    end
+    inst._next_pick_scan = t + 0.5 -- Scan every half second maximum
+
+    -- 4. SPATIAL SCAN
     local px, py, pz = leader.Transform:GetWorldPosition()
-    
-    -- Buscamos en un radio de 15 metros alrededor del líder
     local ents = TheSim:FindEntities(px, py, pz, 15, nil, PICK_CANT_TAGS)
 
     for _, target in ipairs(ents) do
-        -- FIX: Added IsEntityBlacklisted to the safeguard
-        if target ~= nil and target:IsValid() and not IsEntityBlacklisted(inst, target) 
-           and target.components.pickable ~= nil and target.components.pickable:CanBePicked() and target.components.pickable.caninteractwith then
+        -- Fast prefab check -> Validity -> Component logic
+        if target ~= nil and target:IsValid() and 
+           not IGNORED_PREFABS[target.prefab] and
+           not IsEntityBlacklisted(inst, target) and 
+           target.components.pickable ~= nil and 
+           target.components.pickable:CanBePicked() and 
+           target.components.pickable.caninteractwith then
            
-           return BufferedAction(inst, target, ACTIONS.PICK)
+            -- 5. COURTESY CHECK: Is the plant far enough from the player?
+            if target:GetDistanceSqToInst(leader) >= COURTESY_RADIUS_SQ then
+                
+                inst._pickup_plant_target = target
+                inst._next_pick_scan = nil
+                return BufferedAction(inst, target, ACTIONS.PICK)
+                
+            end
         end
     end
 

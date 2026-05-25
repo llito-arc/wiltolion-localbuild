@@ -216,6 +216,17 @@ local function fn()
     inst:AddTag("hat")
     inst:AddTag("wiltolion_torus")
 
+    inst:AddTag("nodeconstruct") -- Prevents the Deconstruction Staff
+    inst:AddTag("wiltolion_bound_item") -- Custom tag for logic and naming
+
+    inst.displaynamefn = function(inst)
+        if inst:HasTag("wiltolion_bound_item") then
+            return "Bound Torus" -- Spawned artificially
+        else
+            return "Gifted Torus" -- Crafted by hand
+        end
+    end
+
     inst.entity:SetPristine()
 
     if not TheWorld.ismastersim then
@@ -240,6 +251,45 @@ local function fn()
     inst.components.equippable.equipslot = EQUIPSLOTS.HEAD
     inst.components.equippable:SetOnEquip(OnEquip)
     inst.components.equippable:SetOnUnequip(OnUnequip)
+    
+    -- Default restriction: Only Wiltolion can wear the spawned version
+    inst.components.equippable.restrictedtag = "wiltolion"
+
+    -- ========================================================
+    -- STATE MANAGEMENT: Crafted vs Spawned
+    -- ========================================================
+    inst._is_crafted = false
+
+    -- When a player physically crafts this item at a station, this event fires
+    inst:ListenForEvent("onbuilt", function(inst, data)
+        inst._is_crafted = true
+        inst:RemoveTag("nodeconstruct")
+        inst:RemoveTag("wiltolion_bound_item")
+        inst.components.equippable.restrictedtag = nil -- Allow anyone to equip it
+    end)
+
+    -- Save the state so it remembers it is crafted after a server reboot
+    local onsave_base = inst.OnSave
+    inst.OnSave = function(inst, data)
+        if onsave_base ~= nil then
+            onsave_base(inst, data)
+        end
+        data.is_crafted = inst._is_crafted
+    end
+
+    -- Load the state when the server starts
+    local onload_base = inst.OnLoad
+    inst.OnLoad = function(inst, data)
+        if onload_base ~= nil then
+            onload_base(inst, data)
+        end
+        if data ~= nil and data.is_crafted then
+            inst._is_crafted = true
+            inst:RemoveTag("nodeconstruct")
+            inst:RemoveTag("wiltolion_bound_item")
+            inst.components.equippable.restrictedtag = nil
+        end
+    end
     
     inst:AddComponent("insulator")
     inst.components.insulator:SetInsulation(30)

@@ -41,6 +41,42 @@ local ANNOYING_ENEMIES = {
     slurper = true,               -- Roba-cordura de las ruinas
 }
 
+-- =========================================================
+-- COMBAT VALIDATION HELPER (DEEP INVESTIGATION FIX)
+-- =========================================================
+local function IsTargetVulnerable(target)
+    if target == nil or not target:IsValid() then 
+        return false 
+    end
+    
+    -- 1. General Invincibility
+    if target.components.health ~= nil and target.components.health:IsInvincible() then
+        return false
+    end
+    
+    -- 2. ANCIENT FUELWEAVER (stalker_atrium) SPECIFIC BYPASS
+    if target.prefab == "stalker_atrium" then
+        -- LAYER 1: Internal native flags
+        if target.hasshield or target.shield ~= nil then
+            return false
+        end
+        -- LAYER 2: Damage Absorption Modifiers
+        if target.components.health ~= nil and target.components.health.externalabsorptmodifiers ~= nil then
+            if target.components.health.externalabsorptmodifiers:Get() >= 1 then
+                return false
+            end
+        end
+        -- LAYER 3: The Mechanical Anchor (Unseen Hands)
+        local x, y, z = target.Transform:GetWorldPosition()
+        local hands = TheSim:FindEntities(x, y, z, 30, {"stalkerminion"}, {"INLIMBO"})
+        if #hands > 0 then
+            return false
+        end
+    end
+    
+    return true
+end
+
 local FORMATION_MAX_SPEED = 10.5
 local FORMATION_RADIUS = 3.5 -- La distancia a la que orbitan
 local FORMATION_ROTATION_SPEED = 0.5
@@ -178,31 +214,41 @@ local function fn()
     inst.components.combat:SetRetargetFunction(1, function(inst)
         local leader = inst.components.follower.leader
         
-        -- Prioridad 1: Si el líder tiene un objetivo, atacamos a ese sin dudarlo
+        -- Prioridad 1: Si el líder tiene un objetivo Y ES VULNERABLE, lo atacamos
         if leader ~= nil and leader.components.combat.target ~= nil then
-            return leader.components.combat.target
+            local leader_target = leader.components.combat.target
+            if IsTargetVulnerable(leader_target) then
+                return leader_target
+            end
         end
 
-        -- Prioridad 2: Si el líder no está peleando, escaneamos 12 unidades a la redonda
+        -- Prioridad 2: Si el líder no pelea (o su objetivo tiene escudo), escaneamos enemigos molestos
         return FindEntity(inst, 12, function(guy)
             return guy.components.health and not guy.components.health:IsDead()
                and guy.components.combat and guy.components.combat:CanBeAttacked(inst)
                and ANNOYING_ENEMIES[guy.prefab] -- ¿Está en nuestra lista negra?
+               and IsTargetVulnerable(guy) -- Aseguramos que las curaciones no sean inmortales por algún bug
         end,
-        { "_combat", "_health" }, -- Etiquetas obligatorias (Optimización del juego)
-        { "INCOVER", "notarget", "invisible", "playerghost", "player" } -- Ignorar si están escondidos
+        { "_combat", "_health" }, 
+        { "INCOVER", "notarget", "invisible", "playerghost", "player" }
         )
     end)
     inst.components.combat:SetKeepTargetFunction(function(inst, target)
-        local leader = inst.components.follower.leader
-        
-        -- Si estábamos persiguiendo un pavo, pero de repente el jugador empieza a 
-        -- pelear contra otra cosa (ej: un sabueso), abandonamos al pavo y volvemos al líder.
-        if leader and leader.components.combat.target and leader.components.combat.target ~= target then
+        -- BARRERA 1: Si el objetivo levanta el escudo en mitad de la pelea, Buddy lo suelta al instante
+        if not IsTargetVulnerable(target) then
             return false
         end
+
+        local leader = inst.components.follower.leader
         
-        -- Si todo está bien, seguimos persiguiendo mientras siga vivo
+        -- BARRERA 2: Si el líder ataca a algo nuevo, Buddy cambia de objetivo para ayudar.
+        -- EXCEPCIÓN: Si el líder ataca a un jefe con escudo, Buddy ignora al líder y sigue atacando a su objetivo actual (ej: una mano).
+        if leader and leader.components.combat.target and leader.components.combat.target ~= target then
+            if IsTargetVulnerable(leader.components.combat.target) then
+                return false
+            end
+        end
+        
         return inst.components.combat:CanTarget(target)
     end)
 

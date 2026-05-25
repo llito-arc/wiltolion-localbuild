@@ -26,13 +26,13 @@ end
 -- GEMS AND POWER CONFIGURATION
 -- =========================================================
 local GEMS_DATA = {
-    redgem          = { timer = "power_red",    duration = 1800 },
-    bluegem         = { timer = "power_blue",   duration = 1800 },
-    purplegem       = { timer = "power_purple", duration = 3600 },
-    orangegem       = { timer = "power_orange", duration = 5400 },
-    yellowgem       = { timer = "power_yellow", duration = 5400 },
-    greengem        = { timer = "power_green",  duration = 9000 },
-    opalpreciousgem = { timer = "power_opal",   duration = 14400 },
+    redgem          = { timer = "power_red",    duration = 1800 }, -- lasts 30 minutes to provide a meaningful seasonal defense without being overpowered
+    bluegem         = { timer = "power_blue",   duration = 1800 }, -- lasts 30 minutes to provide a meaningful seasonal defense without being overpowered
+    purplegem       = { timer = "power_purple", duration = 3600 }, -- lasts 1 hour to make it a meaningful sanity boost without being overpowered
+    orangegem       = { timer = "power_orange", duration = 5400 }, -- lasts 1.5 hours to make it more impactful in multiplayer sessions
+    yellowgem       = { timer = "power_yellow", duration = 5400 }, -- lasts 1.5 hours to make it more impactful in multiplayer sessions
+    greengem        = { timer = "power_green",  duration = 9000 }, -- lasts 2.5 hours to encourage strategic use
+    opalpreciousgem = { timer = "power_opal",   duration = 20000 },-- lasts 5.5 hours to make it a powerful and rare resource
 }
 
 -- =========================================================
@@ -201,7 +201,7 @@ local function UpdateAuras(inst)
     -- ==========================================
     if inst.components.sanityaura then
         if has_purple then
-            inst.components.sanityaura.aura = 0.20 * multiplier
+            inst.components.sanityaura.aura = (20 / 60) * multiplier 
         else
             inst.components.sanityaura.aura = 0
         end

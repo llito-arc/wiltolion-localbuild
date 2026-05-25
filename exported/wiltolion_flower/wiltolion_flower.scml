@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spriter_data scml_version="1.0" generator="BrashMonkey Spriter" generator_version="b5">
+    <folder id="0" name="flowers01">
+        <file id="0" name="flowers01/flowers01-0.png" width="171" height="161" pivot_x="0.497076" pivot_y="0.124689"/>
+        <file id="1" name="flowers01/flowers01-1.png" width="215" height="120" pivot_x="0.498562" pivot_y="0.19657"/>
+        <file id="2" name="flowers01/flowers01-2.png" width="176" height="139" pivot_x="0.455551" pivot_y="0.226703"/>
+        <file id="3" name="flowers01/flowers01-3.png" width="157" height="157" pivot_x="0.566879" pivot_y="0.144673"/>
+        <file id="4" name="flowers01/flowers01-4.png" width="178" height="153" pivot_x="0.432584" pivot_y="0.144608"/>
+        <file id="5" name="flowers01/flowers01-5.png" width="136" height="138" pivot_x="0.502988" pivot_y="0.175866"/>
+        <file id="6" name="flowers01/flowers01-6.png" width="165" height="108" pivot_x="0.569697" pivot_y="0.107964"/>
+        <file id="7" name="flowers01/flowers01-7.png" width="360" height="99" pivot_x="0.447262" pivot_y="0.384848"/>
+        <file id="8" name="flowers01/flowers01-8.png" width="163" height="152" pivot_x="0.546012" pivot_y="0.202961"/>
+        <file id="9" name="flowers01/flowers01-9.png" width="157" height="139" pivot_x="0.591879" pivot_y="0.164748"/>
+        <file id="10" name="flowers01/flowers01-10.png" width="158" height="179" pivot_x="0.475158" pivot_y="0.0598027"/>
+    </folder>
+    <entity id="0" name="wiltolion_flower">
+        <animation id="0" name="f1" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="0" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.497076" abs_pivot_y="0.124689" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="0" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="0" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="1" name="f10" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="9" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.591879" abs_pivot_y="0.164748" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="9" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="9" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="2" name="f2" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="1" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.498562" abs_pivot_y="0.19657" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="1" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="1" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="3" name="f3" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="2" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.455551" abs_pivot_y="0.226703" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="2" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="2" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="4" name="f4" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="3" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.566879" abs_pivot_y="0.144673" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="3" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="3" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="5" name="f5" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="4" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.432584" abs_pivot_y="0.144608" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="4" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="4" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="6" name="f6" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="5" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.502988" abs_pivot_y="0.175866" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="5" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="5" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="7" name="f7" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="6" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.569697" abs_pivot_y="0.107964" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="6" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="6" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="8" name="f8" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="7" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.447262" abs_pivot_y="0.384848" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="7" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="7" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="9" name="f9" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="8" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.546012" abs_pivot_y="0.202961" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="8" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="8" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+        <animation id="10" name="f11" length="34">
+            <mainline>
+                <key id="0">
+                    <object_ref id="0" name="flowers01" folder="0" file="10" abs_x="-0.2" abs_y="0.15" abs_pivot_x="0.475158" abs_pivot_y="0.0598027" abs_angle="0" abs_scale_x="1" abs_scale_y="1" abs_a="1" timeline="0" key="0" z_index="0"/>
+                </key>
+                <key id="1" time="34">
+                    <object_ref id="0" timeline="0" key="1" z_index="0"/>
+                </key>
+            </mainline>
+            <timeline id="0" name="flowers01">
+                <key id="0" spin="0">
+                    <object folder="0" file="10" x="-0.2" y="0.15" angle="0"/>
+                </key>
+                <key id="1" time="34" spin="0">
+                    <object folder="0" file="10" x="-0.2" y="0.15" angle="0"/>
+                </key>
+            </timeline>
+        </animation>
+    </entity>
+</spriter_data>

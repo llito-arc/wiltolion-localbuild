@@ -13,6 +13,7 @@ PrefabFiles = {
     "wiltolion_pylon",
     "wiltolion_gestalt_projectile",
     "wiltolion_thingy",
+    "wiltolion_flower",
 }
 
 Assets = {
