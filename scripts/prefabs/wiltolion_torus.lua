@@ -32,17 +32,14 @@ local function TurnOffForceField(inst, owner_override)
     inst._forcefield_active = false
 
     if owner and owner:IsValid() then
-        -- Remove native tag to allow hit stun again
         owner:RemoveTag("forcefield")
         
-        -- Restore original ApplyDamage logic
         if owner.components.inventory and inst._original_applydamage ~= nil then
             owner.components.inventory.ApplyDamage = inst._original_applydamage
             inst._original_applydamage = nil
         end
     end
 
-    -- Clean up Forcefield FX
     if inst._fx ~= nil then
         if inst._fx:IsValid() then
             inst._fx:kill_fx()
@@ -52,7 +49,6 @@ local function TurnOffForceField(inst, owner_override)
     
     inst._forcefield_owner = nil
     
-    -- Cancel the duration task if it's still running
     if inst._forcefield_task ~= nil then
         inst._forcefield_task:Cancel()
         inst._forcefield_task = nil
@@ -65,12 +61,9 @@ local function TurnOnForceField(inst, owner)
     inst._forcefield_active = true
     inst._forcefield_owner = owner 
     
-    -- Adds native Klei tag to prevent StateGraph hit stunlock
     owner:AddTag("forcefield")
-    
     NotifyOwnerVisuals(inst, false)
     
-    -- Spawn native forcefield FX
     if inst._fx ~= nil then
         inst._fx:kill_fx()
     end
@@ -80,22 +73,18 @@ local function TurnOnForceField(inst, owner)
     inst._fx.AnimState:SetMultColour(0.6, 0.6, 0.6, 0.9) 
     inst._fx.AnimState:SetAddColour(0.8, 0.8, 0.4, 0) 
     
-    -- Monkey-patch ApplyDamage to absorb 100% damage and prevent ALL armor degradation
     if owner.components.inventory and inst._original_applydamage == nil then
         inst._original_applydamage = owner.components.inventory.ApplyDamage
         owner.components.inventory.ApplyDamage = function(inv_self, damage, attacker, weapon)
             if inst._forcefield_active then
-                -- Return 0 damage left for health. Armor components are bypassed.
                 return 0 
             end
             return inst._original_applydamage(inv_self, damage, attacker, weapon)
         end
     end
     
-    -- Schedule forcefield turn-off
     inst._forcefield_task = inst:DoTaskInTime(FORCEFIELD_DURATION, TurnOffForceField, owner)
     
-    -- Schedule cooldown completion
     inst._cooldown_task = inst:DoTaskInTime(FORCEFIELD_COOLDOWN, function(i) 
         i._on_cooldown = false 
         NotifyOwnerVisuals(i, true)
@@ -106,7 +95,6 @@ end
 local function OnAttacked(inst, owner, data)
     if inst._on_cooldown or inst._forcefield_active then return end
     
-    -- Initialize the hit tracker array if it doesn't exist
     if inst._recent_hits == nil then
         inst._recent_hits = {}
     end
@@ -114,16 +102,14 @@ local function OnAttacked(inst, owner, data)
     local current_time = GetTime()
     table.insert(inst._recent_hits, current_time)
     
-    -- Clean up hits that fall outside the HIT_WINDOW timeframe
     for i = #inst._recent_hits, 1, -1 do
         if current_time - inst._recent_hits[i] > HIT_WINDOW then
             table.remove(inst._recent_hits, i)
         end
     end
     
-    -- Trigger forcefield if required hits are accumulated
     if #inst._recent_hits >= HITS_REQUIRED then
-        inst._recent_hits = {} -- Reset accumulator
+        inst._recent_hits = {} 
         TurnOnForceField(inst, owner)
     end
 end
@@ -135,7 +121,7 @@ local function UpdateSpeed(inst, owner)
     if TheWorld.state.isday then
         mult = 1.15
     elseif TheWorld.state.isnight then
-        mult = 0.90 
+        mult = 0.95
     end
     if owner.components.locomotor then
         owner.components.locomotor:SetExternalSpeedMultiplier(inst, "wiltolion_torus_speed", mult)
@@ -191,11 +177,24 @@ local function OnUnequip(inst, owner)
         inst._onattacked = nil
     end
     
-    -- Safely disable forcefield upon unequipping to prevent logic leaks
     TurnOffForceField(inst, owner)
-    
-    -- Clear hit tracker
     inst._recent_hits = {}
+end
+
+-- ========================================================
+-- NETWORK SYNC LOGIC
+-- ========================================================
+-- This function runs on BOTH client and server when the net_bool changes
+local function OnIsCraftedDirty(inst)
+    if inst._is_crafted_net:value() then
+        -- It is crafted (Gifted). Remove restrictive tags.
+        inst:RemoveTag("nodeconstruct")
+        inst:RemoveTag("wiltolion_bound_item")
+    else
+        -- It is spawned/default (Bound). Add restrictive tags.
+        inst:AddTag("nodeconstruct")
+        inst:AddTag("wiltolion_bound_item")
+    end
 end
 
 local function fn()
@@ -216,14 +215,22 @@ local function fn()
     inst:AddTag("hat")
     inst:AddTag("wiltolion_torus")
 
-    inst:AddTag("nodeconstruct") -- Prevents the Deconstruction Staff
-    inst:AddTag("wiltolion_bound_item") -- Custom tag for logic and naming
+    -- Define the network variable to sync the crafted state
+    inst._is_crafted_net = net_bool(inst.GUID, "wiltolion_torus._is_crafted", "iscrafteddirty")
+    
+    -- Listen for changes to the network variable
+    inst:ListenForEvent("iscrafteddirty", OnIsCraftedDirty)
+    
+    -- Initialize to Bound (false) by default on creation
+    inst._is_crafted_net:set_local(false)
+    OnIsCraftedDirty(inst)
 
-    inst.displaynamefn = function(inst)
-        if inst:HasTag("wiltolion_bound_item") then
-            return "Bound Torus" -- Spawned artificially
+    -- This will now evaluate accurately on clients because tags are synced
+    inst.displaynamefn = function(i)
+        if i:HasTag("wiltolion_bound_item") then
+            return "Bound Torus" 
         else
-            return "Gifted Torus" -- Crafted by hand
+            return "Gifted Torus" 
         end
     end
 
@@ -234,6 +241,7 @@ local function fn()
     end
     
     -- Server-side variables
+    inst._is_crafted = false
     inst._recent_hits = {}
     inst._on_cooldown = false
     inst._forcefield_active = false
@@ -244,7 +252,6 @@ local function fn()
     inst.components.inventoryitem.atlasname = "images/inventoryimages/wiltolion_torus.xml"
     
     inst:AddComponent("armor")
-    -- Base absorption, active forcefield intercept handles 100% absorption
     inst.components.armor:InitIndestructible(0.20)
     
     inst:AddComponent("equippable")
@@ -252,42 +259,35 @@ local function fn()
     inst.components.equippable:SetOnEquip(OnEquip)
     inst.components.equippable:SetOnUnequip(OnUnequip)
     
-    -- Default restriction: Only Wiltolion can wear the spawned version
+    -- Default restriction
     inst.components.equippable.restrictedtag = "wiltolion"
 
-    -- ========================================================
-    -- STATE MANAGEMENT: Crafted vs Spawned
-    -- ========================================================
-    inst._is_crafted = false
-
-    -- When a player physically crafts this item at a station, this event fires
-    inst:ListenForEvent("onbuilt", function(inst, data)
-        inst._is_crafted = true
-        inst:RemoveTag("nodeconstruct")
-        inst:RemoveTag("wiltolion_bound_item")
-        inst.components.equippable.restrictedtag = nil -- Allow anyone to equip it
+    -- Server-side crafted event
+    inst:ListenForEvent("onbuilt", function(i, data)
+        i._is_crafted = true
+        i._is_crafted_net:set(true) -- Triggers OnIsCraftedDirty globally
+        i.components.equippable.restrictedtag = nil 
     end)
 
-    -- Save the state so it remembers it is crafted after a server reboot
+    -- Save state
     local onsave_base = inst.OnSave
-    inst.OnSave = function(inst, data)
+    inst.OnSave = function(i, data)
         if onsave_base ~= nil then
-            onsave_base(inst, data)
+            onsave_base(i, data)
         end
-        data.is_crafted = inst._is_crafted
+        data.is_crafted = i._is_crafted
     end
 
-    -- Load the state when the server starts
+    -- Load state
     local onload_base = inst.OnLoad
-    inst.OnLoad = function(inst, data)
+    inst.OnLoad = function(i, data)
         if onload_base ~= nil then
-            onload_base(inst, data)
+            onload_base(i, data)
         end
         if data ~= nil and data.is_crafted then
-            inst._is_crafted = true
-            inst:RemoveTag("nodeconstruct")
-            inst:RemoveTag("wiltolion_bound_item")
-            inst.components.equippable.restrictedtag = nil
+            i._is_crafted = true
+            i._is_crafted_net:set(true) -- Sychronize with clients on load
+            i.components.equippable.restrictedtag = nil
         end
     end
     
