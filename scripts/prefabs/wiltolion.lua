@@ -537,14 +537,40 @@ local master_postinit = function(inst)
     -- [[ READING SYSTEM ]]
     inst:AddComponent("reader")
     local _OldRead = inst.components.reader.Read
+    
     inst.components.reader.Read = function(self, book)
-        if book.prefab == "wilto_journal" or book:HasTag("wilto_journal") then
-            return _OldRead(self, book)
+        local is_journal = (book.prefab == "wilto_journal" or book:HasTag("wilto_journal"))
+        
+        -- 1. Store the book's base sanity cost before executing the read action
+        local base_sanity_cost = 0
+        if book.components.book ~= nil and book.components.book.sanity_cost ~= nil then
+            base_sanity_cost = book.components.book.sanity_cost
         end
-        if self.inst.components.talker then
-            self.inst.components.talker:Say("I tried, but this magic is super duper tricky!")
+
+        -- 2. Execute the native Klei read action (This applies base effects, standard sanity drain, etc.)
+        local success = _OldRead(self, book)
+        
+        -- 3. Apply custom penalties ONLY if the read was successful and it's NOT his personal journal
+        if success and not is_journal then
+            
+            -- Extra Durability Penalty: Force the book to consume 1 additional use
+            if book:IsValid() and book.components.finiteuses ~= nil then
+                book.components.finiteuses:Use(1)
+            end
+            
+            -- Extra Sanity Penalty: Drain an additional 50% of the book's base cost (or flat 15 if not defined)
+            if self.inst.components.sanity ~= nil then
+                local penalty = (base_sanity_cost > 0) and (base_sanity_cost * 0.5) or 15
+                self.inst.components.sanity:DoDelta(-penalty)
+            end
+            
+            -- Optional: Thematic dialogue reacting to the painful magic
+            if self.inst.components.talker ~= nil then
+                self.inst.components.talker:Say("Ouch! This magic is giving me a serious headache!")
+            end
         end
-        return true 
+        
+        return success 
     end
     
     -- [[ PET SYSTEM ]]

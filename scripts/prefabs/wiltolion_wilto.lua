@@ -28,31 +28,44 @@ local WILTO_STATS = {
 -- =========================================================
 
 local HEALING_VALUES = {
-    -- Base game heals
-    honey = 5,
-    butterflywings = 5,
-    bluecap = 10,
+    -- Base Medical Items (Intended specifically for healing)
     spidergland = 15,
     mosquito_sack = 20,
     healingsalve = 30,
     bandage = 50, 
     
-    -- Plants and basics (1 point)
-    petals = 5,
-    foliage = 5,
-    lightbulb = 3,
-    kelp = 5,
-
-    -- Unusual & monster drops (2 to 5 points)
-    moon_tree_blossom = 10,
-    batwing = 5,
-
-    -- High-tier medical (10 to 20 points)
-    lifeinjector = 60,
+    -- Cheap "Trash" & Abundant Nature (1 to 3 points)
+    petals = 1,
+    petals_evil = 1,
+    foliage = 1,          -- Cave fern leaves
+    kelp = 1,             -- Raw bull kelp from the ocean
+    kelp_cooked = 3,
+    cutlichen = 3,        -- Cave lichen
+    lightbulb = 1,
+    forgetmelots = 1,     -- Common weeds
+    tillweed = 1,
+    succulent_picked = 3, -- Desert succulents
+    moon_tree_blossom = 2,
+    ice = 1,              -- Can be eaten to cool down / minor heal
+    seeds = 1,
+    roasted_seeds = 1,
     
-    -- Epic / Boss drops (30+ points)
-    royal_jelly = 60,
-    jellybean = 120,
+    -- Basic Forage & Meats (Low value)
+    butterflywings = 5,
+    honey = 5,
+    bluecap = 10,         -- Excellent raw healing mushroom
+    batwing = 3,
+    cookedbatwing = 8,
+    
+    -- Jerky (Standard survival healing)
+    smallmeat_jerky = 8,
+    jerky = 20,
+
+    -- Standard Crock Pot Foods (Mid-tier, uses common ingredients)
+    fishtacos = 20,
+    trailmix = 30,
+    honeyham = 30,
+    pierogi = 40
 }
 
 local POINTS_PER_TOKEN = 30
@@ -549,35 +562,6 @@ local function wiltofn()
     inst.components.combat:SetRetargetFunction(1, wiltoretargetfn)
     inst.components.combat:SetKeepTargetFunction(wiltokeeptargetfn)
     inst.ShouldFleeForSurvival = ShouldFleeForSurvival
-    
-    -- Combat Interceptor: Tanking, Perfect Dodge & Anti-Stunlock
-    local old_GetAttacked = inst.components.combat.GetAttacked
-    inst.components.combat.GetAttacked = function(self, attacker, damage, weapon, stimuli)
-        local reduced_damage = damage * 0.5 
-        local time_now = GetTime()
-
-        if inst.sg:HasStateTag("hit") or inst.sg:HasStateTag("busy") then
-            inst._stunlock_hits = (inst._stunlock_hits or 0) + 1
-        else
-            inst._stunlock_hits = 0
-        end
-
-        if inst._stunlock_hits >= 2 then
-            inst._stunlock_hits = 0
-            inst.sg:GoToState("perfect_dodge", attacker)
-            return true 
-        end
-
-        if not inst.sg:HasStateTag("busy") and 
-           (inst._last_dodge_time == nil or (time_now - inst._last_dodge_time > 2)) then
-            if math.random() < 0.25 then
-                inst._last_dodge_time = time_now
-                inst.sg:GoToState("perfect_dodge", attacker)
-                return true 
-            end
-        end
-        return old_GetAttacked(self, attacker, reduced_damage, weapon, stimuli)
-    end
 
     inst:AddComponent("follower")
     inst.components.follower:KeepLeaderOnAttacked()
@@ -590,6 +574,79 @@ local function wiltofn()
     inst:AddComponent("trader")
     inst.components.trader.acceptnontradable = true 
     inst.components.trader.deleteitemonaccept = false
+
+    -- ============================================================================
+    -- COMBAT INTERCEPTORS (Dodge Mechanics & Armor Management)
+    -- ============================================================================
+
+    -- 1. RECEIVED DAMAGE HANDLER (Evasion, Stunlock Prevention & Health)
+    local old_GetAttacked = inst.components.combat.GetAttacked
+    inst.components.combat.GetAttacked = function(self, attacker, damage, weapon, stimuli, spdamage)
+        local time_now = GetTime()
+
+        -- Stunlock prevention tracking
+        if inst.sg:HasStateTag("hit") or inst.sg:HasStateTag("busy") then
+            inst._stunlock_hits = (inst._stunlock_hits or 0) + 1
+        else
+            inst._stunlock_hits = 0
+        end
+
+        -- Force dodge if getting stunlocked
+        if inst._stunlock_hits >= 2 then
+            inst._stunlock_hits = 0
+            inst.sg:GoToState("perfect_dodge", attacker)
+            return true 
+        end
+
+        -- 25% chance to randomly dodge if not busy, with a 2-second cooldown
+        if not inst.sg:HasStateTag("busy") and 
+        (inst._last_dodge_time == nil or (time_now - inst._last_dodge_time > 2)) then
+            if math.random() < 0.20 then
+                inst._last_dodge_time = time_now
+                inst.sg:GoToState("perfect_dodge", attacker)
+                return true 
+            end
+        end
+        
+        -- Pass the FULL damage to the original function (no artificial reduction)
+        -- This ensures armors can accurately calculate their absorption
+        return old_GetAttacked(self, attacker, damage, weapon, stimuli, spdamage)
+    end
+
+    -- 2. ARMOR DURABILITY SAVER (50% Slower Degradation)
+    local old_ApplyDamage = inst.components.inventory.ApplyDamage
+    inst.components.inventory.ApplyDamage = function(self, damage, attacker, weapon)
+        local armors = {}
+        local old_TakeDamage = {}
+        
+        -- Scan equipped armors
+        for slot, item in pairs(self.equipslots) do
+            if item ~= nil and item.components.armor ~= nil then
+                table.insert(armors, item)
+                
+                -- Store native TakeDamage function
+                old_TakeDamage[item] = item.components.armor.TakeDamage
+                
+                -- Temporarily override the degradation
+                item.components.armor.TakeDamage = function(armor_self, damage_amount)
+                    -- Multiplier 0.5: Armor loses only half durability
+                    return old_TakeDamage[item](armor_self, damage_amount * 0.5)
+                end
+            end
+        end
+        
+        -- Execute native damage calculation using our overridden durability loss
+        local leftover_damage = old_ApplyDamage(self, damage, attacker, weapon)
+        
+        -- Instantly restore items to their native C++ state
+        for _, item in ipairs(armors) do
+            if item ~= nil and item.components.armor ~= nil then
+                item.components.armor.TakeDamage = old_TakeDamage[item]
+            end
+        end
+        
+        return leftover_damage
+    end
     
     inst.components.trader:SetAcceptTest(function(inst, item, giver)
         if item.components.inventoryitem and item.components.inventoryitem.cangoincontainer == false then

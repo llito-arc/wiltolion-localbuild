@@ -181,6 +181,37 @@ local thingy_descriptions = {
     WANDA = "A useful little creature. Healing up saves precious time."
 }
 
+-- =========================================================
+-- CHARACTER DESCRIPTIONS FOR WILTOLION FLOWER
+-- =========================================================
+local flower_descriptions = {
+    GENERIC = "A magical bloom woven from pure solar energy.",
+    WILLOW = "It's a flower made of fire! Almost.",
+    WOLFGANG = "Is pretty sun flower! But prickly to touch.",
+    WENDY = "A fleeting blossom of light... it will wilt soon.",
+    WX78 = "SOLAR EMISSION DETECTED IN BOTANICAL FORM.",
+    WICKERBOTTOM = "A temporary manifestation of solar radiation taking a floral shape.",
+    WOODIE = "Nice and warm, eh?",
+    WAXWELL = "A gaudy little weed of light.",
+    WIGFRID = "A glöwing blööm fröm the sun realm!",
+    WEBBER = "It's so warm and shiny! Ouch, it bit me!",
+    WINONA = "Now that's what I call a botanical lightbulb.",
+    WARLY = "A beautiful, yet undeniably spicy, little flower.",
+    WORTOX = "Blooming spark of joy! Hyuyu!",
+    WORMWOOD = "Sun friend plant... feels tingly.",
+    WURT = "Bright weed hurt fingers! Florp!",
+    WALTER = "A solar-powered flower! The Pine Pioneers need to see this.",
+    WANDA = "Its time in this world is very, very short."
+}
+
+-- Inject flower dialogues
+for char, line in pairs(flower_descriptions) do
+    if STRINGS.CHARACTERS[char] then
+        if not STRINGS.CHARACTERS[char].DESCRIBE then STRINGS.CHARACTERS[char].DESCRIBE = {} end
+        STRINGS.CHARACTERS[char].DESCRIBE.WILTOLION_FLOWER = line
+    end
+end
+
 for char, line in pairs(thingy_descriptions) do
     if STRINGS.CHARACTERS[char] then
         if not STRINGS.CHARACTERS[char].DESCRIBE then STRINGS.CHARACTERS[char].DESCRIBE = {} end
@@ -267,16 +298,5 @@ STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_PYLON = "It's one of those super
 
 GLOBAL.STRINGS.UI.HUD.PYLON_TOOCLOSE = "It's too close to another Pylon!"
 
--- Añadimos los textos para que no aparezcan códigos en la UI
---STRINGS.SKILLTREE.WILTOLION = {
---    -- Títulos de las Ramas (ORDERS)
---    CATEGORY_CORE = "NÚCLEO SOLAR",
---    CATEGORY_CHASSIS = "CHASIS",
---    CATEGORY_UTILITY = "UTILIDAD",
---    CATEGORY_ALLEGIANCE = "AFILIACIÓN",
-
---    -- Ejemplo para una habilidad específica
---    -- El nombre debe coincidir con el ID que pusiste en el .lua (ej: wiltolion_core_1)
---    WILTOLION_CORE_1_TITLE = "Combustión Eficiente I",
---    WILTOLION_CORE_1_DESC = "Tu núcleo consume el hambre un poco más lento.",
---}
+STRINGS.NAMES.WILTOLION_FLOWER = "Solar Flower"
+STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_FLOWER = "A little piece of my own sunshine!"

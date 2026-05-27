@@ -67,11 +67,11 @@ local function fn()
     -- LIGHT CONFIGURATION (Tiny Aura)
     -- ========================================================
     -- Falloff: How smooth the edge of the light is (0 is sharp, 1 is smooth)
-    inst.Light:SetFalloff(0.7)
+    inst.Light:SetFalloff(0.5)
     -- Intensity: How bright the core is
     inst.Light:SetIntensity(0.5)
     -- Radius: Extremely small so it just illuminates the tile it sits on
-    inst.Light:SetRadius(0.8)
+    inst.Light:SetRadius(0.4)
     -- Colour: Warm golden/orange hue (RGB values out of 255)
     inst.Light:SetColour(250/255, 180/255, 50/255)
     inst.Light:Enable(true)

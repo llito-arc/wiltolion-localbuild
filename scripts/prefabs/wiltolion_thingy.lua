@@ -52,10 +52,17 @@ local function RemoveBuff(target)
         target.components.locomotor:RemoveExternalSpeedMultiplier(target, "wiltolion_spider_buff")
     end
     
+    -- Limpiar el task para indicar que el buff ha terminado
     target.spider_buff_task = nil
 end
 
 local function ApplyBuff(inst, target)
+    -- OPTIMIZACIÓN: Si el objetivo ya tiene el buff activo, ignorar por completo.
+    -- Esto evita el lag y la superposición si hay 2 o más arañas solares en juego.
+    if target.spider_buff_task ~= nil then
+        return
+    end
+
     -- Visual effects
     local target_fx = SpawnPrefab("spider_heal_target_fx")
     if target_fx then
@@ -82,13 +89,9 @@ local function ApplyBuff(inst, target)
     if target.components.locomotor then
         target.components.locomotor:SetExternalSpeedMultiplier(target, "wiltolion_spider_buff", 1.15)
     end
-
-    -- Task management to remove buffs
-    if target.spider_buff_task ~= nil then
-        target.spider_buff_task:Cancel()
-    end
     
-    target.spider_buff_task = target:DoTaskInTime(11, RemoveBuff)
+    -- Task management: Set the buff to last for 2 minutes (120 seconds)
+    target.spider_buff_task = target:DoTaskInTime(120, RemoveBuff)
 end
 
 -- ==========================================================
@@ -99,6 +102,7 @@ local function OnBuffTick(inst)
     local allies = TheSim:FindEntities(px, py, pz, 24, nil, { "INLIMBO", "playerghost", "hostile" }, { "player", "companion", "wiltolion_buddy", "wiltolion_wilto" })
     
     for _, ally in ipairs(allies) do
+        -- Ya no aplicamos incondicionalmente. ApplyBuff se encarga de filtrar si ya lo tienen.
         if ally:IsValid() and ally.components.health and not ally.components.health:IsDead() then
             ApplyBuff(inst, ally)
         end
@@ -203,7 +207,7 @@ local function fn()
     inst.heal_amounts = {}
     inst.target_to_heal = nil
     
-    inst:DoPeriodicTask(10, OnBuffTick)
+    inst:DoPeriodicTask(20, OnBuffTick)
     inst:DoPeriodicTask(2, OnHealTick)
 
     inst.AnimState:SetLightOverride(0.85)
@@ -214,8 +218,8 @@ local function fn()
     end)
 
     inst:AddComponent("locomotor")
-    inst.components.locomotor.walkspeed = TUNING.SPIDER_WALK_SPEED
-    inst.components.locomotor.runspeed = TUNING.SPIDER_RUN_SPEED
+    inst.components.locomotor.walkspeed = 4.5
+    inst.components.locomotor.runspeed = 5
     inst.components.locomotor:SetAllowPlatformHopping(true)
 
     inst:SetStateGraph("SGwiltolionthingy")

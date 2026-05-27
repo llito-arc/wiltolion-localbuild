@@ -37,6 +37,7 @@ local TOLERANCE_DIST = 0.5
 local WILTO_ATTACK_WINDUP = 0.5
 local KITE_DIST = 4
 local STOP_KITE_DIST = 6
+local SERVER_TICK_TOLERANCE = 0.15
 -- ============================================================================
 -- SEARCH TAGS (Pre-allocated to prevent memory garbage collection overhead)
 -- ============================================================================
@@ -223,22 +224,28 @@ local function GetWorkAction(inst)
     if inst._work_target ~= nil then
         local target = inst._work_target
         
-        -- Verify if cached target is still physically safe and valid
-        local is_safe_cache = IsValidWorkTarget(inst, target, toggles) and target:IsOnValidGround()
-        
-        if is_safe_cache then
-            local action, tool = PickValidActionFrom(inst, target)
-            if action ~= nil then
-                return BufferedAction(inst, target, action, tool)
-            else
-                -- Tool broke or user toggled the action off mid-walk
-                inst._work_target = nil
-            end
-        else
-            -- THE CHAINING FIX: Target compromised (e.g. tree caught fire). 
-            -- Wipe cache and force an instant scan to prevent standing still.
+        -- INSTANT WIPE: If the chunk was unloaded by the engine, forget the target
+        if target:IsAsleep() then
             inst._work_target = nil
-            inst._next_work_scan = nil 
+            inst._next_work_scan = nil
+        else
+            -- Verify if cached target is still physically safe and valid
+            local is_safe_cache = IsValidWorkTarget(inst, target, toggles) and target:IsOnValidGround()
+            
+            if is_safe_cache then
+                local action, tool = PickValidActionFrom(inst, target)
+                if action ~= nil then
+                    return BufferedAction(inst, target, action, tool)
+                else
+                    -- Tool broke or user toggled the action off mid-walk
+                    inst._work_target = nil
+                end
+            else
+                -- THE CHAINING FIX: Target compromised (e.g. tree caught fire). 
+                -- Wipe cache and force an instant scan to prevent standing still.
+                inst._work_target = nil
+                inst._next_work_scan = nil 
+            end
         end
     end
 
@@ -256,7 +263,8 @@ local function GetWorkAction(inst)
     -- 4. SPATIAL SCAN (Around Wilto First)
     local targets_near_wilto = TheSim:FindEntities(x, y, z, 25, nil, TOWORK_CANT_TAGS, ANY_TOWORK_MUSTONE_TAGS)
     for _, t in ipairs(targets_near_wilto) do
-        if IsValidWorkTarget(inst, t, toggles) then
+        -- Skip sleeping targets completely before running the heavy validation
+        if not t:IsAsleep() and IsValidWorkTarget(inst, t, toggles) then
             valid_target = t
             break -- Optimization: Stop scanning once we find the first valid target
         end
@@ -267,7 +275,8 @@ local function GetWorkAction(inst)
         local lx, ly, lz = leader.Transform:GetWorldPosition()
         local targets_near_leader = TheSim:FindEntities(lx, ly, lz, 25, nil, TOWORK_CANT_TAGS, ANY_TOWORK_MUSTONE_TAGS)
         for _, t in ipairs(targets_near_leader) do
-            if IsValidWorkTarget(inst, t, toggles) then
+            -- Skip sleeping targets here as well
+            if not t:IsAsleep() and IsValidWorkTarget(inst, t, toggles) then
                 valid_target = t
                 break
             end
@@ -622,6 +631,69 @@ end
 -- PHASE 5: COMBAT & EVASION ENGINE
 -- ============================================================================
 
+-- ============================================================================
+-- ADVANCED CHEAT KITING V2 (Ping Tolerance & Aggro Prediction)
+-- ============================================================================
+local SERVER_TICK_TOLERANCE = 0.15 -- 4 to 5 server frames of safety buffer
+
+local function ShouldCheatKite(inst)
+    local target = inst.components.combat.target
+    if target == nil or not target:IsValid() or target.components.health == nil or target.components.health:IsDead() then
+        return false
+    end
+
+    local t_combat = target.components.combat
+    if t_combat == nil then
+        return false
+    end
+
+    -- 1. EXPLOIT INCAPACITATION
+    if target.components.sleeper ~= nil and target.components.sleeper:IsAsleep() then return false end
+    if target.components.freezable ~= nil and target.components.freezable:IsFrozen() then return false end
+    if target.sg ~= nil and target.sg:HasStateTag("stunned") then return false end
+
+    -- 2. DYNAMIC RANGE CALCULATION (Including Wilto's own physics radius)
+    local enemy_reach = t_combat:GetAttackRange() 
+        + (target:GetPhysicsRadius(0) or 0) 
+        + (inst:GetPhysicsRadius(0) or 0) 
+        + 0.5
+    
+    -- If the enemy is exclusively targeting Wilto, they will walk towards him.
+    -- We add an artificial safety margin to the distance check to prevent late dodges.
+    local is_targeting_wilto = t_combat.target == inst
+    local aggro_margin = is_targeting_wilto and 1.5 or 0
+    
+    local dist_sq = inst:GetDistanceSqToInst(target)
+    local safe_dist = enemy_reach + aggro_margin
+
+    if dist_sq > (safe_dist * safe_dist) then
+        return false -- We are safely out of reach, go in for the attack
+    end
+
+    -- 3. ANIMATION STATE CHECK (Added charge/leap detection)
+    if target.sg ~= nil and (
+        target.sg:HasStateTag("attack") or 
+        target.sg:HasStateTag("abouttoattack") or
+        target.sg:HasStateTag("charge") or
+        target.sg:HasStateTag("leapattack")
+    ) then
+        return true
+    end
+
+    -- 4. COOLDOWN MATH WITH NETWORK BUFFER
+    local last_attack = t_combat.laststartattacktime or t_combat.lastdoattacktime or 0
+    local attack_period = t_combat.min_attack_period or 2
+    local time_since_attack = GetTime() - last_attack
+    local time_to_next_attack = attack_period - time_since_attack
+
+    -- If the time before the enemy strikes is less than Wilto's windup PLUS our safety buffer, we flee
+    if time_to_next_attack <= (WILTO_ATTACK_WINDUP + SERVER_TICK_TOLERANCE) then
+        return true
+    end
+
+    return false
+end
+
 local function GetExplosiveTarget(inst)
     local x, y, z = inst.Transform:GetWorldPosition()
     local explosives = TheSim:FindEntities(x, y, z, AVOID_EXPLOSIVE_DIST, EXPLOSIVE_MUST_TAGS, DANGER_CANT_TAGS)
@@ -735,45 +807,57 @@ local function GetCheatKiteEvasionTarget(inst, hunter)
 end
 
 -- ============================================================================
--- AMBIENT CHAT AND GREETING SYSTEM
+-- AMBIENT CHAT AND GREETING SYSTEM (BT Integrated)
 -- ============================================================================
-local function TryAmbientGreeting(inst)
-    if inst.sg == nil or inst.sg:HasStateTag("busy") or inst.sg:HasStateTag("moving") or inst.components.combat:HasTarget() then
-        return
+local function CheckAmbientGreeting(inst)
+    -- 1. Strict guards to ensure Wilto is completely idle
+    if inst.sg == nil or inst.sg:HasStateTag("busy") or inst.sg:HasStateTag("moving") then
+        return false
+    end
+    
+    -- Abort if a brain action is already buffered or in combat
+    if inst:GetBufferedAction() ~= nil or (inst.components.combat ~= nil and inst.components.combat:HasTarget()) then
+        return false
     end
 
     local t = GetTime()
-    if inst._last_greet_time ~= nil and (t - inst._last_greet_time) < 45 then
-        return
-    end
-
-    if math.random() > 0.30 then
-        inst._last_greet_time = t - 35 
-        return
+    
+    -- 2. Cooldown validation (45 seconds)
+    if inst._next_greet_time ~= nil and t < inst._next_greet_time then
+        return false
     end
 
     local x, y, z = inst.Transform:GetWorldPosition()
-    local players = TheSim:FindEntities(x, y, z, 6, { "player" }, { "ghost", "playerghost" })
+    local players = TheSim:FindEntities(x, y, z, 6, { "player" }, { "ghost", "playerghost", "INLIMBO" })
     
     for _, player in ipairs(players) do
         if player:IsValid() then
-            inst._last_greet_time = t
-            inst:FacePoint(player.Transform:GetWorldPosition())
-            inst:PushEvent("wilto_greet", { target = player })
+            inst._greet_target = player
+            return true 
+        end
+    end
+
+    -- 3. Throttle the scan if no players are nearby (Check again in 3 seconds to save CPU)
+    inst._next_greet_time = t + 3
+    return false
+end
+
+local function DoAmbientGreeting(inst)
+    local target = inst._greet_target
+    inst._greet_target = nil                 -- Clear the cache
+    inst._next_greet_time = GetTime() + 45   -- Apply the 45s cooldown
+    
+    if target ~= nil and target:IsValid() then
+        inst:FacePoint(target.Transform:GetWorldPosition())
+        inst:PushEvent("wilto_greet", { target = target })
+        
+        if inst.components.talker ~= nil and SPEECH_WILTO ~= nil and SPEECH_WILTO.GREETING ~= nil then
+            local player_name = target:GetDisplayName() or "friend"
+            local dialogues = SPEECH_WILTO.GREETING
+            local random_index = math.random(#dialogues)
+            local chosen_line = dialogues[random_index]
             
-            if inst.components.talker ~= nil then
-                local player_name = player:GetDisplayName() or "friend"
-                
-                -- Fetch dialogues directly from the external dictionary
-                local dialogues = SPEECH_WILTO.GREETING
-                local random_index = math.random(#dialogues)
-                local chosen_line = dialogues[random_index]
-                
-                -- Inject the player's name into the %s placeholder from the dictionary
-                inst.components.talker:Say(string.format(chosen_line, player_name))
-            end
-            
-            break 
+            inst.components.talker:Say(string.format(chosen_line, player_name))
         end
     end
 end
@@ -789,6 +873,7 @@ function WiltolionWiltoBrain:OnStart()
     -- Action Handlers
     local function DoDanceParty() self.inst:PushEvent("dance") end
     local function DoRetreat() self.inst.components.combat:DropTarget() end
+    local function CheckGreeting() return CheckAmbientGreeting(self.inst) end
 
     -- Condition Checkers for WhileNodes
     local function CheckWatchGame() return ShouldWatchMinigame(self.inst) end
@@ -807,6 +892,9 @@ function WiltolionWiltoBrain:OnStart()
         local t = self.inst.wilto_toggles
         return t == nil or (t.chop ~= false or t.mine ~= false or t.dig ~= false)
     end
+
+    -- Target filter for dodging
+    local function CheckDodgeTarget(guy) return guy ~= nil and guy == self.inst.components.combat.target end
 
     -- Custom Hunter Target Checkers for RunAway
     local function CheckDangerTarget(hunter) return IsDangerTarget(self.inst, hunter) end
@@ -860,9 +948,12 @@ function WiltolionWiltoBrain:OnStart()
                         Follow(self.inst, GetLeader, 0, 3, 5)
                     }, 0.25)
                 ),
+                
+                -- Advanced Kiting logic execution
                 WhileNode(CheckKiting, "Cheat Kiting",
-                    RunAway(self.inst, CheckKiteEvasion, 3, 4) 
+                    RunAway(self.inst, CheckDodgeTarget, KITE_DIST, STOP_KITE_DIST) 
                 ),
+                
                 ChaseAndAttack(self.inst, nil, MAX_KITE_DIST, nil, nil, KeepCombatTarget)
             }, 0.25)
         ),
@@ -883,6 +974,12 @@ function WiltolionWiltoBrain:OnStart()
 
         -- [ SECTION 7: FOLLOW & IDLE ]
         Follow(self.inst, GetLeader, MIN_FOLLOW_DIST, TARGET_FOLLOW_DIST, MAX_FOLLOW_DIST, true),
+
+        -- GREETING NODE: Only executes if Follow falls through (Wilto is near the leader) 
+        -- and no higher priority task is active.
+        WhileNode(CheckGreeting, "Ambient Greet",
+            ActionNode(function() DoAmbientGreeting(self.inst) end, "Do Greet")
+        ),
 
         Wander(self.inst, GetWanderPos, 2.5, { 
             minwalktime = 0.5, 
@@ -951,9 +1048,6 @@ function WiltolionWiltoBrain:OnStart()
             inst._last_watchdog_pos = nil
         end
     end)
-
-    -- Ambient Greeting System Initialization
-    self.greeting_task = self.inst:DoPeriodicTask(3, TryAmbientGreeting)
 end
 
 -- ============================================================================
@@ -963,11 +1057,6 @@ function WiltolionWiltoBrain:OnStop()
     if self.watchdog_task ~= nil then
         self.watchdog_task:Cancel()
         self.watchdog_task = nil
-    end
-    
-    if self.greeting_task ~= nil then
-        self.greeting_task:Cancel()
-        self.greeting_task = nil
     end
 end
 
