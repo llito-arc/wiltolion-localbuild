@@ -39,6 +39,9 @@ local ANNOYING_ENEMIES = {
     mossling = true,              -- Crías del Moose/Goose
     bat = true,                   -- Murciélagos (Batilisks)
     slurper = true,               -- Roba-cordura de las ruinas
+
+    bird_mutant = true,           -- Pájaros mutantes de las ruinas
+    bird_mutant_spitter = true,   -- Escupidores mutantes de las ruinas
 }
 
 -- =========================================================

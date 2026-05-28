@@ -87,6 +87,90 @@ local SPEECH_WILTO = {
         "You smell like smoke, %s.",
         "Ah- don't sneak up on me like that, %s..."
     },
+
+    AMBIENT_CRABKING = {
+        "That giant crab doesn't look very happy...",
+        "I can hear the ice cracking around it.",
+        "Should we really be standing this close to it...?"
+    },
+
+    AMBIENT_BEEQUEEN = {
+        "That is a very, very big beehive...",
+        "I can hear buzzing. A lot of buzzing inside.",
+        "Let's not wake whatever is sleeping in there."
+    },
+
+    AMBIENT_TOADSTOOL = {
+        "That mushroom looks... suspiciously large.",
+        "There are holes in the ground all around it...",
+        "It smells awful here, like rotting spores."
+    },
+
+    AMBIENT_KLAUS_SACK = {
+        "That's a very large sack... wrapped in chains.",
+        "Is there a lock on that? I wonder what's inside.",
+        "There's an unsettling chill near this bag."
+    },
+
+    AMBIENT_RUINS = {
+        "This altar feels... ancient and corrupted.",
+        "The nightmare magic is very strong right here.",
+        "I don't like the way this structure hums."
+    },
+
+    AMBIENT_ANCIENT_GATEWAY = {
+        "That gateway... it feels like it shouldn't exist.",
+        "The shadows are bleeding out of that thing.",
+        "Are we at the center of the world... or the end of it?"
+    },
+
+    AMBIENT_LUNAR_ISLAND = {
+        "The energy from these fissures is so cold...",
+        "This whole place feels like it fell from the sky.",
+        "The water in that spring looks strange..."
+    },
+
+    AMBIENT_LUNAR_RUINS = {
+        "Look at this giant device... what does it do?",
+        "This archive is completely silent. It's eerie.",
+        "I wonder who built all of this technology..."
+    },
+
+    AMBIENT_LUNAR_RIFT = {
+        "The sky is torn open here... it's blinding.",
+        "That rift... the energy pouring out is chaotic.",
+        "I feel lightheaded standing near that tear."
+    },
+
+    AMBIENT_SHADOW_RIFT = {
+        "The darkness is pouring out like an open wound...",
+        "That rift is terrifying. We shouldn't stare into it.",
+        "I can hear whispers coming from the tear..."
+    },
+
+    AMBIENT_OASIS = {
+        "Water! Actual, clean water in this desert.",
+        "This lake feels so peaceful compared to the sandstorms.",
+        "Maybe we could rest here for a little while."
+    },
+
+    AMBIENT_MONKEY_ISLAND = {
+        "These monkeys are staring at my inventory...",
+        "I don't trust these apes at all.",
+        "Are they... organized? That's slightly terrifying."
+    },
+
+    AMBIENT_WATERLOGGED = {
+        "That tree is massive! Its roots go down forever.",
+        "The canopy blocks out the sky completely.",
+        "It's humid and quiet here... I kind of like it."
+    },
+
+    AMBIENT_HERMIT = {
+        "Someone lives all the way out here by themselves?",
+        "That hermit seems grumpy. We should be polite.",
+        "It's impressive she survives on this island alone."
+    }
 }
 
 return SPEECH_WILTO

@@ -262,12 +262,19 @@ local function fn()
     -- Default restriction
     inst.components.equippable.restrictedtag = "wiltolion"
 
-    -- Server-side crafted event
-    inst:ListenForEvent("onbuilt", function(i, data)
-        i._is_crafted = true
-        i._is_crafted_net:set(true) -- Triggers OnIsCraftedDirty globally
-        i.components.equippable.restrictedtag = nil 
-    end)
+    -- ========================================================
+    -- CRAFTING OVERRIDES
+    -- ========================================================
+    -- Server-side crafted event natively triggered by the builder component
+    inst.OnBuiltFn = function(inst, builder)
+        inst._is_crafted = true
+        inst._is_crafted_net:set(true) -- Triggers OnIsCraftedDirty globally
+        
+        -- Remove the character restriction so it can be gifted to friends
+        if inst.components.equippable ~= nil then
+            inst.components.equippable.restrictedtag = nil 
+        end
+    end
 
     -- Save state
     local onsave_base = inst.OnSave

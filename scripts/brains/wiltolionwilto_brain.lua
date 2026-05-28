@@ -434,7 +434,6 @@ local function GetStoreAction(inst)
 end
 
 local function GetPickupAction(inst)
-    -- SG Guard
     if inst.sg ~= nil and inst.sg:HasStateTag("busy") then return nil end
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.pickup == false then return nil end
 
@@ -444,12 +443,13 @@ local function GetPickupAction(inst)
     local leader = GetLeader(inst)
     if leader == nil then return nil end
 
-    -- 1. STRICT CACHE SYSTEM
+    -- 1. STRICT CACHE SYSTEM (Fixed Unloaded Chunks)
     if inst._pickup_target ~= nil then
         local target = inst._pickup_target
         
-        -- Proactive safeguard
+        -- Proactive safeguard: Must not be asleep (unloaded chunk)
         local is_safe_cache = target:IsValid() and 
+                              not target:IsAsleep() and
                               target.components.inventoryitem ~= nil and 
                               target.components.inventoryitem.canbepickedup and 
                               not target.components.inventoryitem:IsHeld() and
@@ -470,26 +470,22 @@ local function GetPickupAction(inst)
     -- 2. THROTTLING SYSTEM
     local t = GetTime()
     if inst._next_pickup_scan ~= nil and t < inst._next_pickup_scan then return nil end
-    inst._next_pickup_scan = t + 0.5 -- 0.5s is safe for pickups
+    inst._next_pickup_scan = t + 0.5 
 
     local x, y, z = inst.Transform:GetWorldPosition()
-    
-    -- Utilizing pre-allocated tables from Phase 1
     local ents = TheSim:FindEntities(x, y, z, 15, INVENTORY_MUST_TAGS, NO_PICKUP_TAGS)
     local ignorethese = leader._brain_pickup_ignorethese or {}
 
     for _, item in ipairs(ents) do
-        if item:IsValid() and not ignorethese[item] and not IsEntityBlacklisted(inst, item) then
+        -- Ensure target is awake before registering it
+        if item:IsValid() and not item:IsAsleep() and not ignorethese[item] and not IsEntityBlacklisted(inst, item) then
             if item.components.inventoryitem ~= nil and item.components.inventoryitem.canbepickedup and not item.components.inventoryitem:IsHeld() then
                 if item.components.container == nil and item:IsOnValidGround() and not item:HasTag("trap") then
-                    
-                    -- Distance safeguard: Don't pick up items too far from the leader
                     if item:GetDistanceSqToInst(leader) < 400 then
                         inst._pickup_target = item 
                         inst._next_pickup_scan = nil 
                         return BufferedAction(inst, item, ACTIONS.PICKUP)
                     end
-                    
                 end
             end
         end
@@ -503,7 +499,6 @@ end
 -- ============================================================================
 
 local function GetPickAction(inst)
-    -- SG Guard
     if inst.sg ~= nil and inst.sg:HasStateTag("busy") then return nil end
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.harvest == false then return nil end
 
@@ -513,11 +508,12 @@ local function GetPickAction(inst)
     local leader = GetLeader(inst)
     if leader == nil then return nil end
 
-    -- 1. STRICT CACHE SYSTEM
+    -- 1. STRICT CACHE SYSTEM (Fixed Unloaded Chunks)
     if inst._pick_target ~= nil then
         local target = inst._pick_target
         
         local is_safe_cache = target:IsValid() and 
+                              not target:IsAsleep() and
                               target.components.pickable ~= nil and 
                               target.components.pickable:CanBePicked() and
                               not target:HasTag("fire") and
@@ -537,22 +533,16 @@ local function GetPickAction(inst)
     inst._next_pick_scan = t + 0.6 
 
     local x, y, z = inst.Transform:GetWorldPosition()
-    
-    -- Utilizing a dynamic local table since MUST tags for picking are extremely simple
     local ents = TheSim:FindEntities(x, y, z, 15, { "pickable" }, PICK_CANT_TAGS)
     
     for _, plant in ipairs(ents) do
-        if plant:IsValid() and plant.components.pickable ~= nil and plant.components.pickable:CanBePicked() then
+        if plant:IsValid() and not plant:IsAsleep() and plant.components.pickable ~= nil and plant.components.pickable:CanBePicked() then
             if not IGNORED_PLANTS[plant.prefab] and not IsEntityBlacklisted(inst, plant) then
-                
-                -- COMPLEXITY PRESERVED: Courtesy Logic
-                -- Do not pick the plant if the leader is extremely close to it (let the player have it)
                 if plant:GetDistanceSqToInst(leader) > COURTESY_RADIUS_SQ then
                     inst._pick_target = plant
                     inst._next_pick_scan = nil
                     return BufferedAction(inst, plant, ACTIONS.PICK)
                 end
-                
             end
         end
     end
@@ -561,14 +551,13 @@ local function GetPickAction(inst)
 end
 
 local function GetHealAction(inst)
-    -- SG Guard
     if inst.sg ~= nil and inst.sg:HasStateTag("busy") then return nil end
-    if inst.wilto_toggles ~= nil and inst.wilto_toggles.heal == false then return nil end
+    
+    -- REMOVED: wilto_toggles.heal check has been entirely removed
 
     local inv = inst.components.inventory
     if inv == nil then return nil end
 
-    -- 1. COMPLEXITY PRESERVED: Validate healing capability before scanning
     local heal_item = nil
     for _, item in pairs(inv.itemslots) do
         if item ~= nil and item.components.healer ~= nil then
@@ -577,20 +566,18 @@ local function GetHealAction(inst)
         end
     end
     
-    -- Abort immediately if Wilto has no healing items (saves CPU)
     if heal_item == nil then return nil end
 
-    -- 2. THROTTLING SYSTEM
     local t = GetTime()
     if inst._next_heal_scan ~= nil and t < inst._next_heal_scan then return nil end
-    inst._next_heal_scan = t + 1.0 -- Scan every 1 second, healing is lower priority than combat
+    inst._next_heal_scan = t + 1.0 
 
     local x, y, z = inst.Transform:GetWorldPosition()
     local ents = TheSim:FindEntities(x, y, z, 15, HEALTH_MUST_TAGS, HEALTH_CANT_TAGS, HEALTH_MUSTONE_TAGS)
     
     for _, target in ipairs(ents) do
-        if target:IsValid() and target.components.health ~= nil and not target.components.health:IsDead() then
-            -- Only heal if target is below 80% health and not blacklisted (e.g., wone, other buddies)
+        -- Skip sleeping targets here as well
+        if target:IsValid() and not target:IsAsleep() and target.components.health ~= nil and not target.components.health:IsDead() then
             if target.components.health:GetPercent() < 0.80 and not BLACKLISTED_HEAL_TARGETS[target.prefab] then
                 inst._next_heal_scan = nil
                 return BufferedAction(inst, target, ACTIONS.HEAL, heal_item)
@@ -845,7 +832,7 @@ end
 local function DoAmbientGreeting(inst)
     local target = inst._greet_target
     inst._greet_target = nil                 -- Clear the cache
-    inst._next_greet_time = GetTime() + 45   -- Apply the 45s cooldown
+    inst._next_greet_time = GetTime() + 300   -- 5 minute cooldown before greeting the same player again (can be adjusted as needed)
     
     if target ~= nil and target:IsValid() then
         inst:FacePoint(target.Transform:GetWorldPosition())
@@ -885,7 +872,7 @@ function WiltolionWiltoBrain:OnStart()
     -- Toggle Interrupters
     local function IsCombatEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.fight ~= false end
     local function IsHealEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.heal ~= false end
-    local function IsPickEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.harvest ~= false end
+    local function IsHarvestEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.harvest ~= false end
     local function IsPickupEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.pickup ~= false end
     local function IsGiveEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.give ~= false end
     local function IsWorkEnabled() 
@@ -935,9 +922,8 @@ function WiltolionWiltoBrain:OnStart()
         watch_game,
 
         -- [ SECTION 3: HEALING & SUPPORT ]
-        WhileNode(IsHealEnabled, "Heal Toggle", 
-            DoAction(self.inst, GetHealAction, "Heal Target", true)
-        ),
+        -- Innate survival behaviour. Always active, no toggle required.
+        DoAction(self.inst, GetHealAction, "Heal Target", true),
 
         -- [ SECTION 4: COMBAT & TACTICS ]
         WhileNode(IsCombatEnabled, "Combat Toggle",
@@ -961,7 +947,7 @@ function WiltolionWiltoBrain:OnStart()
         -- [ SECTION 5: WORK & RESOURCE GATHERING ]
         -- Wrapped in WhileNodes to instantly abort ongoing actions if toggled off
         WhileNode(IsWorkEnabled, "Work Toggle", DoAction(self.inst, GetWorkAction, "Work Tasks", true)),
-        WhileNode(IsPickEnabled, "Gather Toggle", DoAction(self.inst, GetPickAction, "Harvest Plants", true)),
+        WhileNode(IsHarvestEnabled, "Gather Toggle", DoAction(self.inst, GetPickAction, "Harvest Plants", true)),
         WhileNode(IsPickupEnabled, "Pickup Toggle", DoAction(self.inst, GetPickupAction, "Pickup Resources", true)),
 
         -- [ SECTION 6: INVENTORY MANAGEMENT ]

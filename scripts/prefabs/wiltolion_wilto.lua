@@ -388,6 +388,21 @@ local function OnGearBroke(inst)
     inst:DoTaskInTime(0.2, EquipBestGear)
 end
 
+-- =========================================================
+-- WEAPON BREAK DETECTOR (Combat specific)
+-- =========================================================
+local function OnAttackOther(inst, data)
+    if inst.components.inventory ~= nil then
+        local current_weapon = inst.components.inventory:GetEquippedItem(EQUIPSLOTS.HANDS)
+        -- If the currently equipped weapon is gone (broken or consumed), try to equip the next best weapon immediately.
+        if current_weapon == nil then
+            if EquipBestGear ~= nil then
+                EquipBestGear(inst)
+            end
+        end
+    end
+end
+
 local function OnNewTarget(inst, data)
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false then
         inst:DoTaskInTime(0, function() 
@@ -458,9 +473,92 @@ local function OnCustomSink(inst)
     end)
 end
 
+-- =========================================================
+-- AMBIENT & POINT OF INTEREST SYSTEM
+-- =========================================================
+
+-- Dictionary of specific prefabs that define a "Special Zone"
+local SPECIAL_ZONES = {
+    {
+        key = "AMBIENT_CRABKING",
+        check = function(prefab) return prefab == "crabking" or prefab == "crabking_spawner" end
+    },
+    {
+        key = "AMBIENT_BEEQUEEN",
+        check = function(prefab) return prefab == "beequeenhivegrown" or prefab == "beequeen" end
+    },
+    {
+        key = "AMBIENT_TOADSTOOL",
+        check = function(prefab) return prefab == "toadstool_cap" end
+    },
+    {
+        key = "AMBIENT_KLAUS_SACK",
+        check = function(prefab) return prefab == "klaus_sack" end
+    },
+    {
+        key = "AMBIENT_RUINS",
+        check = function(prefab) return prefab == "ancient_altar" or prefab == "ancient_altar_broken" end
+    },
+    {
+        key = "AMBIENT_ANCIENT_GATEWAY",
+        check = function(prefab) return prefab == "atrium_gateway" or prefab == "ancient_gateway" end
+    },
+    {
+        key = "AMBIENT_LUNAR_ISLAND",
+        check = function(prefab) return prefab == "moon_device" or prefab == "moon_altar" or prefab == "moon_fissure" or prefab == "hotspring" end
+    },
+    {
+        key = "AMBIENT_LUNAR_RUINS",
+        check = function(prefab) return prefab == "archive_resonator_base" or prefab == "sentrybomb" end
+    },
+    {
+        key = "AMBIENT_LUNAR_RIFT",
+        check = function(prefab) return prefab == "lunarrift_portal" or prefab == "lunarrift_crystal_big" end
+    },
+    {
+        key = "AMBIENT_SHADOW_RIFT",
+        check = function(prefab) return prefab == "shadowrift_portal" or prefab == "shadowrift_crystal_big" end
+    },
+    {
+        key = "AMBIENT_OASIS",
+        check = function(prefab) return prefab == "oasis_lake" end
+    },
+    {
+        key = "AMBIENT_MONKEY_ISLAND",
+        check = function(prefab) return prefab == "monkeyqueen" or prefab == "monkey_hut" end
+    },
+    {
+        key = "AMBIENT_WATERLOGGED",
+        check = function(prefab) return prefab == "watertree_pillar" or prefab == "watertree_root" end
+    },
+    {
+        key = "AMBIENT_HERMIT",
+        check = function(prefab) return prefab == "hermitcrab" or prefab == "hermithouse" end
+    }
+}
+
 local function OnAmbientTick(inst)
-    if not inst.sg:HasStateTag("busy") and not inst.components.combat:HasTarget() then
-        if math.random() < 0.3 and inst.components.talker then
+    if inst.sg:HasStateTag("busy") or inst.components.combat:HasTarget() then return end
+
+    if math.random() < 0.3 and inst.components.talker then
+        local special_key = nil
+        
+        -- Let the C++ engine find the specific prefabs, it is much faster
+        for _, zone in ipairs(SPECIAL_ZONES) do
+            local found_ent = FindEntity(inst, 30, function(ent) 
+                return zone.check(ent.prefab) 
+            end)
+            
+            if found_ent ~= nil then
+                special_key = zone.key
+                break
+            end
+        end
+        
+        -- Decide what to say based on what was found
+        if special_key ~= nil and speech[special_key] ~= nil then
+            inst.components.talker:Say(GetRandomItem(speech[special_key]))
+        else
             inst.components.talker:Say(GetRandomItem(speech.AMBIENT))
         end
     end
@@ -693,7 +791,8 @@ local function wiltofn()
     inst:ListenForEvent("newcombattarget", OnNewTarget)
     inst:ListenForEvent("gotnewitem", OnGotNewItem)
     inst:ListenForEvent("armorbroke", OnGearBroke)
-    inst:ListenForEvent("weaponbroke", OnGearBroke)
+    --inst:ListenForEvent("weaponbroke", OnGearBroke)
+    inst:ListenForEvent("onattackother", OnAttackOther)
     inst:ListenForEvent("death", OnWiltoDeath)
     inst:ListenForEvent("startfollowing", OnStartFollowing)
 

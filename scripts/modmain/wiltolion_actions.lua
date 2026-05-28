@@ -88,35 +88,51 @@ AddModRPCHandler("Wiltolion", "WiltoDropEverything", function(player)
 end)
 
 -- =====================================================================
--- SAFEGUARD HELPER: Completely wipes Wilto's memory and restarts his AI
+-- COMPLETE AI PURGE & RESET (Definitive Version)
 -- =====================================================================
-local function ForceResetWiltoAI(wilto)
-    if wilto == nil or not wilto:IsValid() then return end
+local function ForceResetWiltoAI(inst)
+    if inst == nil or not inst:IsValid() then return end
     
-    -- 1. Stop all movement logic
-    if wilto.components.locomotor ~= nil then
-        wilto.components.locomotor:Stop()
-        wilto.components.locomotor:Clear()
+    -- 1. Stop all physical movement and clear pathfinding memory
+    if inst.components.locomotor ~= nil then
+        inst.components.locomotor:Stop()
+        inst.components.locomotor:Clear()
     end
-    
+
     -- 2. Clear any hanging actions that cause StateGraph deadlocks
-    wilto:ClearBufferedAction()
-    
-    -- 3. Force StateGraph to a neutral state (interrupts stuck animations)
-    if wilto.sg ~= nil then
-        wilto.sg:GoToState("idle")
+    inst:ClearBufferedAction()
+
+    -- 3. Force StateGraph to a neutral state (interrupts stuck animations/busy tags)
+    if inst.sg ~= nil then
+        inst.sg:GoToState("idle")
     end
+
+    -- 4. Drop current combat aggro
+    if inst.components.combat ~= nil then
+        inst.components.combat:DropTarget()
+    end
+
+    -- 5. Purge all cached targets and internal lists
+    inst._work_target = nil
+    inst._pickup_target = nil
+    inst._pick_target = nil
+    inst._greet_target = nil
+    inst._blacklisted_items = nil
     
-    -- 4. Clear custom brain cache variables (from wiltolionwilto_brain.lua)
-    wilto._work_target = nil
-    wilto._pickup_target = nil
-    wilto._next_work_scan = nil
-    wilto._next_sort_scan = nil
-    wilto._next_pickup_scan = nil
-    wilto._blacklisted_items = nil
-    
-    -- 5. Hard restart the Brain threads
-    wilto:RestartBrain()
+    -- 6. Reset all scan throttles and watchdog to force a fresh environment read
+    inst._next_work_scan = nil
+    inst._next_pickup_scan = nil
+    inst._next_pick_scan = nil
+    inst._next_heal_scan = nil
+    inst._next_sort_scan = nil
+    inst._next_greet_time = nil
+    inst._watchdog_stuck_ticks = 0
+    inst._last_watchdog_pos = nil
+
+    -- 7. Hard Restart of the Brain threads
+    if inst.brain ~= nil then
+        inst:RestartBrain()
+    end
 end
 
 -- =====================================================================
