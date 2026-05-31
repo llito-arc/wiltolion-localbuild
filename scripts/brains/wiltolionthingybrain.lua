@@ -6,8 +6,8 @@ require "behaviours/faceentity"
 require "behaviours/standstill"
 
 local MAX_WANDER_DIST = 10
-local RUN_AWAY_DIST = 6
-local STOP_RUN_AWAY_DIST = 10
+local RUN_AWAY_DIST = 10     -- Increased for better survival
+local STOP_RUN_AWAY_DIST = 14 -- Increased for better survival
 
 local WiltolionThingyBrain = Class(Brain, function(self, inst)
     Brain._ctor(self, inst)
@@ -82,38 +82,32 @@ end
 -- MAIN BRAIN TREE
 -- =========================================================
 function WiltolionThingyBrain:OnStart()
-    
     local root = PriorityNode({
         -- 1. Basic Panic (Fire)
         WhileNode(function() return self.inst.components.burnable and self.inst.components.burnable:IsBurning() end, "OnFire", Panic(self.inst)),
 
-        -- 2. Passive Healing System
+        -- 2. Passive Healing System (PRIORITIZED OVER FLEEING)
         WhileNode(function() 
             local target = self.inst.target_to_heal
-            
-            -- Clear the target if it becomes invalid, turns into a ghost, or dies
             if target ~= nil and (not target:IsValid() or target:HasTag("playerghost") or (target.components.health and target.components.health:IsDead())) then
                 self.inst.target_to_heal = nil
             end
-
-            -- If we don't have a valid target anymore, find a new one
             if self.inst.target_to_heal == nil then
                 self.inst.target_to_heal = GetHealTarget(self.inst)
             end
-
             return self.inst.target_to_heal ~= nil 
         end, "Needs Healing",
             PriorityNode({
-                -- Stand completely still to heal if close enough
-                WhileNode(function() return self.inst:IsNear(self.inst.target_to_heal, 2.5) end, "Stand and Heal",
+                -- Stand completely still to prepare the jump if within striking distance (10)
+                WhileNode(function() return self.inst:IsNear(self.inst.target_to_heal, 20) end, "Stand and Heal",
                     StandStill(self.inst)
                 ),
-                -- Follow the wounded target if they move away
-                Follow(self.inst, function() return self.inst.target_to_heal end, 0, 1.5, 3)
+                -- Follow the wounded target if they move out of jump range (Stops at 8)
+                Follow(self.inst, function() return self.inst.target_to_heal end, 0, 15, 22)
             }, 0.25)
         ),
 
-        -- 3. Survival (Run from danger)
+        -- 3. Survival (Run from danger only when not actively healing)
         RunAway(self.inst, { fn = IsDanger, tags = {"_combat"}, notags = {"INLIMBO", "player", "companion"} }, RUN_AWAY_DIST, STOP_RUN_AWAY_DIST),
 
         -- 4. Follow Leader (Default safe behavior)

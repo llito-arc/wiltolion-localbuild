@@ -103,6 +103,47 @@ local function KeepFaceLeaderFn(inst, target)
 end
 
 -- ============================================================================
+-- INVENTORY CACHE CHECKER
+-- Evaluates if the inventory can accept a specific item, bypassing IsFull() 
+-- blindspots by checking for incomplete stackable slots and backpacks.
+-- ============================================================================
+local function CanInventoryAcceptPrefab(inv, prefab_name)
+    if inv == nil or prefab_name == nil then return false end
+    
+    -- 1. Fast native check: If main inventory has empty slots, accept immediately.
+    if not inv:IsFull() then 
+        return true 
+    end
+    
+    -- 2. Deep scan: Check main inventory for incomplete stacks of the exact same prefab.
+    for _, item in pairs(inv.itemslots) do
+        if item.prefab == prefab_name and item.components.stackable ~= nil and not item.components.stackable:IsFull() then
+            return true
+        end
+    end
+    
+    -- 3. Container scan: Check if Wilto is wearing a backpack with available space or stacks.
+    for _, equipped_item in pairs(inv.equipslots) do
+        if equipped_item.components.container ~= nil then
+            
+            -- If the backpack has at least one empty slot
+            if not equipped_item.components.container:IsFull() then
+                return true
+            end
+            
+            -- If the backpack is completely full, check its slots for incomplete stacks
+            for _, contained_item in pairs(equipped_item.components.container.slots) do
+                if contained_item.prefab == prefab_name and contained_item.components.stackable ~= nil and not contained_item.components.stackable:IsFull() then
+                    return true
+                end
+            end
+        end
+    end
+    
+    return false
+end
+
+-- ============================================================================
 -- CACHE & BLACKLIST SYSTEM
 -- ============================================================================
 -- Prevents Wilto from attempting to interact with unreachable or glitched entities
@@ -438,22 +479,22 @@ local function GetPickupAction(inst)
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.pickup == false then return nil end
 
     local inv = inst.components.inventory
-    if inv ~= nil and inv:IsFull() then return nil end
+    if inv == nil then return nil end -- Changed: Removed inv:IsFull() early exit
 
     local leader = GetLeader(inst)
     if leader == nil then return nil end
 
-    -- 1. STRICT CACHE SYSTEM (Fixed Unloaded Chunks)
+    -- 1. STRICT CACHE SYSTEM (Fixed Unloaded Chunks & Stack Validation)
     if inst._pickup_target ~= nil then
         local target = inst._pickup_target
         
-        -- Proactive safeguard: Must not be asleep (unloaded chunk)
         local is_safe_cache = target:IsValid() and 
                               not target:IsAsleep() and
                               target.components.inventoryitem ~= nil and 
                               target.components.inventoryitem.canbepickedup and 
                               not target.components.inventoryitem:IsHeld() and
                               target:IsOnValidGround() and
+                              CanInventoryAcceptPrefab(inv, target.prefab) and -- NEW: Verifies stack space
                               not IsEntityBlacklisted(inst, target)
 
         if is_safe_cache and target.components.burnable ~= nil and (target.components.burnable:IsBurning() or target.components.burnable:IsSmoldering()) then
@@ -477,15 +518,17 @@ local function GetPickupAction(inst)
     local ignorethese = leader._brain_pickup_ignorethese or {}
 
     for _, item in ipairs(ents) do
-        -- Ensure target is awake before registering it
         if item:IsValid() and not item:IsAsleep() and not ignorethese[item] and not IsEntityBlacklisted(inst, item) then
             if item.components.inventoryitem ~= nil and item.components.inventoryitem.canbepickedup and not item.components.inventoryitem:IsHeld() then
                 if item.components.container == nil and item:IsOnValidGround() and not item:HasTag("trap") then
-                    if item:GetDistanceSqToInst(leader) < 400 then
+                    
+                    -- NEW: Validate inventory before committing to the target
+                    if CanInventoryAcceptPrefab(inv, item.prefab) and item:GetDistanceSqToInst(leader) < 400 then
                         inst._pickup_target = item 
                         inst._next_pickup_scan = nil 
                         return BufferedAction(inst, item, ACTIONS.PICKUP)
                     end
+                    
                 end
             end
         end
@@ -503,12 +546,21 @@ local function GetPickAction(inst)
     if inst.wilto_toggles ~= nil and inst.wilto_toggles.harvest == false then return nil end
 
     local inv = inst.components.inventory
-    if inv ~= nil and inv:IsFull() then return nil end
+    if inv == nil then return nil end -- Changed: Removed inv:IsFull() early exit
 
     local leader = GetLeader(inst)
     if leader == nil then return nil end
 
-    -- 1. STRICT CACHE SYSTEM (Fixed Unloaded Chunks)
+    -- NEW: Local helper to predict the loot of the plant before picking it
+    local function CanHoldProduct(target)
+        local product = target.components.pickable ~= nil and target.components.pickable.product or nil
+        if product ~= nil then
+            return CanInventoryAcceptPrefab(inv, product)
+        end
+        return not inv:IsFull() 
+    end
+
+    -- 1. STRICT CACHE SYSTEM (Fixed Unloaded Chunks & Stack Validation)
     if inst._pick_target ~= nil then
         local target = inst._pick_target
         
@@ -518,6 +570,7 @@ local function GetPickAction(inst)
                               target.components.pickable:CanBePicked() and
                               not target:HasTag("fire") and
                               not target:HasTag("smolder") and
+                              CanHoldProduct(target) and -- NEW: Verifies stack space for the plant's product
                               not IsEntityBlacklisted(inst, target)
 
         if is_safe_cache then
@@ -538,11 +591,14 @@ local function GetPickAction(inst)
     for _, plant in ipairs(ents) do
         if plant:IsValid() and not plant:IsAsleep() and plant.components.pickable ~= nil and plant.components.pickable:CanBePicked() then
             if not IGNORED_PLANTS[plant.prefab] and not IsEntityBlacklisted(inst, plant) then
-                if plant:GetDistanceSqToInst(leader) > COURTESY_RADIUS_SQ then
+                
+                -- NEW: Predict inventory space before walking to the plant
+                if CanHoldProduct(plant) and plant:GetDistanceSqToInst(leader) > COURTESY_RADIUS_SQ then
                     inst._pick_target = plant
                     inst._next_pick_scan = nil
                     return BufferedAction(inst, plant, ACTIONS.PICK)
                 end
+                
             end
         end
     end
@@ -553,20 +609,8 @@ end
 local function GetHealAction(inst)
     if inst.sg ~= nil and inst.sg:HasStateTag("busy") then return nil end
     
-    -- REMOVED: wilto_toggles.heal check has been entirely removed
-
-    local inv = inst.components.inventory
-    if inv == nil then return nil end
-
-    local heal_item = nil
-    for _, item in pairs(inv.itemslots) do
-        if item ~= nil and item.components.healer ~= nil then
-            heal_item = item
-            break
-        end
-    end
-    
-    if heal_item == nil then return nil end
+    -- Check for custom Wilto heal tokens instead of physical inventory items!
+    if (inst.wilto_heal_tokens or 0) < 1 then return nil end
 
     local t = GetTime()
     if inst._next_heal_scan ~= nil and t < inst._next_heal_scan then return nil end
@@ -576,11 +620,20 @@ local function GetHealAction(inst)
     local ents = TheSim:FindEntities(x, y, z, 15, HEALTH_MUST_TAGS, HEALTH_CANT_TAGS, HEALTH_MUSTONE_TAGS)
     
     for _, target in ipairs(ents) do
-        -- Skip sleeping targets here as well
         if target:IsValid() and not target:IsAsleep() and target.components.health ~= nil and not target.components.health:IsDead() then
-            if target.components.health:GetPercent() < 0.80 and not BLACKLISTED_HEAL_TARGETS[target.prefab] then
+            
+            -- Triage logic: Different health thresholds based on entity type
+            local is_player = target:HasTag("player")
+            local hp_percent = target.components.health:GetPercent()
+            local heal_threshold = is_player and 0.80 or 0.60 
+            
+            if hp_percent < heal_threshold and not BLACKLISTED_HEAL_TARGETS[target.prefab] then
                 inst._next_heal_scan = nil
-                return BufferedAction(inst, target, ACTIONS.HEAL, heal_item)
+                
+                -- Create the action WITHOUT a physical item, relying solely on the tokens
+                local act = BufferedAction(inst, target, ACTIONS.HEAL)
+                act.distance = 2 -- Set a comfortable distance so he doesn't stutter trying to push the player
+                return act
             end
         end
     end
@@ -871,7 +924,7 @@ function WiltolionWiltoBrain:OnStart()
 
     -- Toggle Interrupters
     local function IsCombatEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.fight ~= false end
-    local function IsHealEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.heal ~= false end
+    --local function IsHealEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.heal ~= false end
     local function IsHarvestEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.harvest ~= false end
     local function IsPickupEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.pickup ~= false end
     local function IsGiveEnabled() return self.inst.wilto_toggles == nil or self.inst.wilto_toggles.give ~= false end

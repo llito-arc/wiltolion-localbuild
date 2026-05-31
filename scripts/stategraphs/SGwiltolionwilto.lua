@@ -47,24 +47,26 @@ local actionhandlers =
     ActionHandler(ACTIONS.GIVEALLTOPLAYER, "give"),
     ActionHandler(ACTIONS.DROP, "give"),
     ActionHandler(ACTIONS.STORE, "give"),
-    --ActionHandler(ACTIONS.STORE, "store_item"),
     ActionHandler(ACTIONS.PICKUP, "take"),
     ActionHandler(ACTIONS.CHECKTRAP, "take"),
     ActionHandler(ACTIONS.PICK,
-		function(inst, action)
-			return action.target ~= nil
-				and (action.target.components.pickable ~= nil and (
-						(action.target.components.pickable.jostlepick and "doshortaction") or
-						(action.target.components.pickable.quickpick and "doshortaction") or
-						"dolongaction"
-					)) or
-					(action.target.components.searchable ~= nil and (
-						(action.target.components.searchable.jostlesearch and "doshortaction") or
-						(action.target.components.searchable.quicksearch and "doshortaction") or
-						"dolongaction"
-					))
-				or nil
-		end),
+        function(inst, action)
+            return action.target ~= nil
+                and (action.target.components.pickable ~= nil and (
+                        (action.target.components.pickable.jostlepick and "doshortaction") or
+                        (action.target.components.pickable.quickpick and "doshortaction") or
+                        "dolongaction"
+                    )) or
+                    (action.target.components.searchable ~= nil and (
+                        (action.target.components.searchable.jostlesearch and "doshortaction") or
+                        (action.target.components.searchable.quicksearch and "doshortaction") or
+                        "dolongaction"
+                    ))
+                or nil
+        end),
+        
+    -- THE FIX: Register the Heal action to trigger the "heal_leader" state!
+    ActionHandler(ACTIONS.HEAL, "heal_leader"),
 }
 
 local events =
@@ -77,12 +79,12 @@ local events =
 			inst.sg:GoToState("hit")
 		end
 	end),
-    EventHandler("do_heal_leader", function(inst, data)
-        if not inst.sg:HasStateTag("busy") then
-            -- Pasamos el 'data' (que ahora contiene al herido) al estado
-            inst.sg:GoToState("heal_leader", data)
-        end
-    end),
+    --EventHandler("do_heal_leader", function(inst, data)
+    --    if not inst.sg:HasStateTag("busy") then
+    --        -- Pasamos el 'data' (que ahora contiene al herido) al estado
+    --        inst.sg:GoToState("heal_leader", data)
+    --    end
+    --end),
 	EventHandler("doattack", function(inst, data)
 		if inst.components.health ~= nil and not inst.components.health:IsDead() and not inst.sg:HasStateTag("busy") then
 			inst.sg:GoToState("attack", data ~= nil and data.target or nil)
@@ -215,15 +217,17 @@ local states =
         name = "heal_leader",
         tags = {"busy", "doing"},
         
-        onenter = function(inst, data)
+        onenter = function(inst)
             inst.components.locomotor:Stop()
             inst.AnimState:PlayAnimation("give")
             inst.AnimState:PushAnimation("give_pst", false)
             
-            -- Si viene un target en data lo usamos, si no, intentamos el líder por si acaso
-            inst.sg.statemem.target = (data and data.target) or (inst.components.follower and inst.components.follower:GetLeader())
-            -- Place this upvalue array at the top of the file.
-            -- The '%s' acts as a dynamic placeholder for the target's name.
+            -- The correct native way to get the target from an Action State
+            local buffaction = inst:GetBufferedAction()
+            local target = (buffaction ~= nil and buffaction.target) or (inst.components.follower and inst.components.follower:GetLeader())
+            
+            inst.sg.statemem.target = target
+            
             local HEAL_START_LINES = {
                 "Hold still, %s! Let me help you!",
                 "Don't worry, %s, I've got you covered!",
@@ -234,12 +238,9 @@ local states =
                 "I'm on it, %s! Let's get you back in fighting shape!"
             }
             
-            if inst.components.talker and inst.sg.statemem.target then
-                -- Fallback safety check for the target's name
-                local name = inst.sg.statemem.target.name or "friend"
-                -- 1. Grab a random template line safely using Klei's utility
+            if inst.components.talker and target then
+                local name = target.name or "friend"
                 local raw_line = GetRandomItem(HEAL_START_LINES)
-                -- 2. Dynamically inject the name into the placeholder without creating memory leaks
                 local formatted_line = string.format(raw_line, name)
                 inst.components.talker:Say(formatted_line)
             end
@@ -250,16 +251,38 @@ local states =
             TimeEvent(14 * FRAMES, function(inst)
                 local target = inst.sg.statemem.target
                 
-                -- ¡AQUÍ ESTÁ LA LÍNEA MODIFICADA CON IsInvincible!
                 if target and target:IsValid() and inst:IsNear(target, 8) 
                    and target.components.health 
                    and not target.components.health:IsDead() 
                    and not target.components.health:IsInvincible() then
                     
                     if inst.wilto_heal_tokens and inst.wilto_heal_tokens >= 1 then
-                        inst.wilto_heal_tokens = inst.wilto_heal_tokens - 1
-                        target.components.health:DoDelta(25)
+                        local is_player = target:HasTag("player")
+                        -- Securely get the max health of the entity, defaulting to 100 just in case
+                        local max_hp = target.components.health.maxhealth or 100
+                        local heal_amount = 0
+                        local consume_token = true
+                        
+                        -- Dynamic Percentage & Token Economy Logic
+                        if is_player then
+                            -- Players: 15% of their max health, always costs 1 token
+                            heal_amount = max_hp * 0.15 
+                        else
+                            -- Companions/Pets: 30% of their max health, 50% chance to be free
+                            heal_amount = max_hp * 0.30
+                            if math.random() < 0.50 then
+                                consume_token = false
+                            end
+                        end
+                        
+                        if consume_token then
+                            inst.wilto_heal_tokens = inst.wilto_heal_tokens - 1
+                        end
+                        
+                        -- Apply the calculated percentage amount
+                        target.components.health:DoDelta(heal_amount)
                         inst._recently_healed = true
+                        
                         local fx = SpawnPrefab("spider_heal_target_fx")
                         if fx then
                             fx.Transform:SetPosition(target.Transform:GetWorldPosition())
@@ -267,6 +290,9 @@ local states =
                         inst.SoundEmitter:PlaySound("dontstarve/common/plant")
                     end
                 end
+                
+                -- CRITICAL FIX: Purge the action to prevent brain deadlocks
+                inst:ClearBufferedAction()
             end),
         },
         

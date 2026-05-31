@@ -190,9 +190,9 @@ end
 
 -- 1. Configuration Table for Day Phases
 local PHASE_STATS = {
-    day   = { dmg = 1.25, spd = 1.1, dap = TUNING.DAPPERNESS_SMALL, light_mult = 1.0, color = {255/255, 230/255, 150/255}, override = 0.0 },
-    dusk  = { dmg = 1.00, spd = 1.0, dap = 0,                       light_mult = 0.6, color = {255/255, 200/255, 120/255}, override = 0.3 },
-    night = { dmg = 0.75, spd = 0.9, dap = -TUNING.DAPPERNESS_MED,  light_mult = 0.4, color = {200/255, 150/255,  50/255}, override = 1.0 }
+    day   = { dmg = 1.25, spd = 1.10, dap = TUNING.DAPPERNESS_SMALL, light_mult = 1.0, color = {255/255, 230/255, 150/255}, override = 0.25 },
+    dusk  = { dmg = 1.00, spd = 1.0, dap = 0,                       light_mult = 0.75, color = {255/255, 200/255, 120/255}, override = 0.35 },
+    night = { dmg = 0.85, spd = 0.9, dap = -TUNING.DAPPERNESS_MED,  light_mult = 0.55, color = {200/255, 150/255,  50/255}, override = 1.0 }
 }
 
 local function GetCurrentPhaseStats()
@@ -208,8 +208,12 @@ local function SmoothLight(inst)
     inst._cur_int = Lerp(inst._cur_int or 0, inst._tgt_int or 0, 0.15)
     inst._cur_ovr = Lerp(inst._cur_ovr or 0, inst._tgt_ovr or 0, 0.15)
     
+    -- Smooth transition for the gradient curve
+    inst._cur_falloff = Lerp(inst._cur_falloff or 0.5, inst._tgt_falloff or 0.5, 0.15)
+    
     inst.Light:SetRadius(inst._cur_rad)
     inst.Light:SetIntensity(inst._cur_int)
+    inst.Light:SetFalloff(inst._cur_falloff)
     inst.AnimState:SetLightOverride(inst._cur_ovr)
 end
 
@@ -310,43 +314,45 @@ local function UpdateThermalAndLight(inst)
 
     -- BLOCK C: CALCULATE CORE-BASED THERMALS & LIGHT RADIUS
     local temp_modifier, heater_emit, insulation = 0, 0, 0
-    local base_radius = 4.0
+    local base_radius = 4.0 
     local should_spark = false
 
-    -- 4 FASES DEL NÚCLEO
+    -- 4 CORE PHASES
     if core_pct >= 0.90 then
-        -- FASE ARDIENTE (90% - 100%)
+        -- BURNING PHASE (90% - 100%)
         local p = (core_pct - 0.90) / 0.10 
         temp_modifier = Lerp(60, 90, p)
         heater_emit = Lerp(60, 90, p)
         insulation = Lerp(200, 240, p)
-        base_radius = Lerp(8.0, 12.0, p)
+        -- Reduced drastically. 6.5 is slightly larger than a Lantern.
+        base_radius = Lerp(5.0, 6.5, p) 
         should_spark = true
 
     elseif core_pct >= 0.50 then
-        -- FASE CÁLIDA (50% - 90%)
+        -- WARM PHASE (50% - 90%)
         local p = (core_pct - 0.50) / 0.40
         temp_modifier = Lerp(20, 60, p)
         heater_emit = Lerp(20, 60, p)
         insulation = Lerp(60, 200, p)
-        base_radius = Lerp(4.0, 8.0, p)
+        -- Normal torch/player light range
+        base_radius = Lerp(3.5, 5.0, p) 
 
     elseif core_pct >= 0.20 then
-        -- FASE TEMPLADA (20% - 50%)
+        -- TEMPERATE PHASE (20% - 50%)
         local p = (core_pct - 0.20) / 0.30
         temp_modifier = Lerp(0, 20, p)
         heater_emit = Lerp(0, 20, p)
         insulation = Lerp(0, 60, p)
-        base_radius = Lerp(1.5, 4.0, p)
+        -- Weak light, player must stay very close
+        base_radius = Lerp(1.5, 3.5, p) 
 
     else
-        -- FASE APAGADA (0% - 20%)
+        -- EXTINGUISHED PHASE (0% - 20%)
         local p = core_pct / 0.20
-        -- De 20% a 0%, la temperatura cae drásticamente a -35
         temp_modifier = Lerp(-35, 0, p) 
         heater_emit = 0
         insulation = 0
-        base_radius = Lerp(0, 1.5, p) -- Se apaga poco a poco hasta 0
+        base_radius = Lerp(0, 1.5, p) 
     end
 
     -- BLOCK D: MANAGE SPARKS                                                                                                                     
@@ -383,14 +389,24 @@ local function UpdateThermalAndLight(inst)
     local current_temp = (inst.components.temperature and inst.components.temperature:GetCurrent()) or 25
     local temp_mult = math.max(0, math.min(1, current_temp / 10)) 
 
-    -- Si el núcleo llega a 0, apagamos la luz del todo, independientemente del clima
     if core_pct <= 0 then temp_mult = 0 end
 
     inst.Light:Enable(temp_mult > 0)
     inst.Light:SetColour(unpack(phase.color))
 
+    -- Keep the balanced radius we defined earlier
     inst._tgt_rad = base_radius * phase.light_mult * temp_mult
+    
+    -- High intensity creates a very solid, bright core around the player
     inst._tgt_int = 0.8 * temp_mult
+    
+    -- Falloff smooths out the transition. 
+    -- 0.4 keeps the core bright but smoothly fades it before reaching the edge.
+    if core_pct > 0 then
+        inst._tgt_falloff = Lerp(0.6, 0.4, core_pct)
+    else
+        inst._tgt_falloff = 0.7
+    end
 
     if phase == PHASE_STATS.night and temp_mult < 0.2 then
         inst._tgt_ovr = temp_mult * 5
@@ -527,6 +543,10 @@ local master_postinit = function(inst)
     inst._cur_rad, inst._tgt_rad = 0, 0
     inst._cur_int, inst._tgt_int = 0, 0
     inst._cur_ovr, inst._tgt_ovr = 0, 0
+    
+    -- Initialize falloff variables with a neutral gradient
+    inst._cur_falloff, inst._tgt_falloff = 0.5, 0.5
+
     inst._sparks_task = nil 
     
     inst.components.health:SetMaxHealth(TUNING.WILTOLION_HEALTH)

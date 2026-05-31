@@ -39,6 +39,13 @@ end
 -- AURA SYSTEM (BUFFS)
 -- ==========================================================
 local function RemoveBuff(target)
+    if not target or not target:IsValid() then 
+        return 
+    end
+    
+    target:RemoveTag("wiltolion_buffed")
+
+    -- Clean Combat modifiers
     if target.components.combat then
         if target.components.combat.externaldamagemultipliers then
             target.components.combat.externaldamagemultipliers:RemoveModifier(target, "wiltolion_spider_buff")
@@ -48,20 +55,35 @@ local function RemoveBuff(target)
         end
     end
 
+    -- Clean Speed modifiers
     if target.components.locomotor then
         target.components.locomotor:RemoveExternalSpeedMultiplier(target, "wiltolion_spider_buff")
     end
     
-    -- Limpiar el task para indicar que el buff ha terminado
-    target.spider_buff_task = nil
+    -- Clean the task if it was called manually or by an event
+    if target.spider_buff_task ~= nil then
+        target.spider_buff_task:Cancel()
+        target.spider_buff_task = nil
+    end
 end
 
 local function ApplyBuff(inst, target)
-    -- OPTIMIZACIÓN: Si el objetivo ya tiene el buff activo, ignorar por completo.
-    -- Esto evita el lag y la superposición si hay 2 o más arañas solares en juego.
-    if target.spider_buff_task ~= nil then
+    -- STRICT CHECKS: Ensure the target is valid, alive, and doesn't already have the buff
+    if not target or not target:IsValid() or target:HasTag("wiltolion_buffed") then
         return
     end
+    if target:HasTag("playerghost") or target:HasTag("INLIMBO") or target:HasTag("structure") or target:HasTag("wall") then
+        return
+    end
+    if not target.components.health or target.components.health:IsDead() then
+        return
+    end
+    if not target.components.combat then
+        return
+    end
+
+    -- Mark as actively buffed
+    target:AddTag("wiltolion_buffed")
 
     -- Visual effects
     local target_fx = SpawnPrefab("spider_heal_target_fx")
@@ -70,28 +92,38 @@ local function ApplyBuff(inst, target)
         target_fx.Transform:SetScale(1.2, 1.2, 1.2)
     end
 
-    local spider_fx = SpawnPrefab("spider_heal_target_fx")
-    if spider_fx then
-        spider_fx.Transform:SetPosition(inst.Transform:GetWorldPosition())
-        spider_fx.Transform:SetScale(1.2, 1.2, 1.2)
+    -- Apply Modifiers
+    if target.components.combat.externaldamagemultipliers then
+        target.components.combat.externaldamagemultipliers:SetModifier(target, 1.15, "wiltolion_spider_buff")
     end
-
-    -- Stat buffs
-    if target.components.combat then
-        if target.components.combat.externaldamagemultipliers then
-            target.components.combat.externaldamagemultipliers:SetModifier(target, 1.15, "wiltolion_spider_buff")
+    
+    if target.components.combat.externaldamagetakenmultipliers then
+        local current_mult = target.components.combat.externaldamagetakenmultipliers:Get()
+        local defense_modifier = 0.85
+        
+        -- Smart defense: Apply heavy armor only if it's a weak minion (takes full damage)
+        if current_mult >= 1.0 and not target:HasTag("player") then
+            defense_modifier = 0.70 
         end
-        if target.components.combat.externaldamagetakenmultipliers then
-            target.components.combat.externaldamagetakenmultipliers:SetModifier(target, 0.85, "wiltolion_spider_buff")
-        end
+        
+        target.components.combat.externaldamagetakenmultipliers:SetModifier(target, defense_modifier, "wiltolion_spider_buff")
     end
 
     if target.components.locomotor then
         target.components.locomotor:SetExternalSpeedMultiplier(target, "wiltolion_spider_buff", 1.15)
     end
     
-    -- Task management: Set the buff to last for 2 minutes (120 seconds)
-    target.spider_buff_task = target:DoTaskInTime(120, RemoveBuff)
+    -- SAFETY LISTENERS: Force buff removal if the entity dies or is unloaded
+    target:ListenForEvent("death", RemoveBuff)
+    target:ListenForEvent("onremove", RemoveBuff)
+    
+    -- Task management (120 seconds)
+    target.spider_buff_task = target:DoTaskInTime(120, function(t)
+        -- Remove listeners to prevent memory leaks, then remove buff
+        t:RemoveEventCallback("death", RemoveBuff)
+        t:RemoveEventCallback("onremove", RemoveBuff)
+        RemoveBuff(t)
+    end)
 end
 
 -- ==========================================================
@@ -112,7 +144,6 @@ end
 local function OnHealTick(inst)
     local current_time = GetTime()
 
-    -- Clean the blacklist and reset the heal amounts for expired targets
     if inst.heal_blacklist then
         for guid, expire_time in pairs(inst.heal_blacklist) do
             if current_time >= expire_time then
@@ -124,44 +155,23 @@ local function OnHealTick(inst)
         end
     end
 
-    -- Active healing logic based on brain target
     local target = inst.target_to_heal
     if target and target:IsValid() then
         if target.components.health and not target.components.health:IsDead() and not target:HasTag("playerghost") then
             if inst:IsNear(target, 4) then
                 local hp_pct = target.components.health:GetPercent()
                 
-                -- Target is valid and within the healing window (under 55%)
                 if hp_pct < 0.55 then
-                    local heal_power = 10
-                    target.components.health:DoDelta(heal_power, false, inst.prefab)
-                    
-                    -- Track the total amount healed for this specific target
-                    inst.heal_amounts[target.GUID] = (inst.heal_amounts[target.GUID] or 0) + heal_power
-                    
-                    -- Visual and sound effects
-                    local fx = SpawnPrefab("spider_heal_target_fx")
-                    if fx then 
-                        fx.Transform:SetPosition(target.Transform:GetWorldPosition())
-                        fx.Transform:SetScale(1, 1, 1)
-                    end
-                    
-                    inst:PushEvent("play_subtle_heal")
-                    inst.SoundEmitter:PlaySound("webber1/creatures/spider_cannonfodder/heal_fartcloud")
-                    
-                    -- Check stop conditions: reached 55% HP OR reached the 150 HP healing cap
-                    if target.components.health:GetPercent() >= 0.55 or inst.heal_amounts[target.GUID] >= 150 then
-                        inst.heal_blacklist[target.GUID] = current_time + 90
-                        inst.target_to_heal = nil
-                    end
+                    -- Trigger the AoE Jump State instead of direct healing
+                    inst:PushEvent("do_aoe_heal_jump")
+                    -- Drop target temporarily to avoid spamming the jump
+                    inst.target_to_heal = nil 
                 else
-                    -- Fail-safe: Target is somehow above 55%, blacklist and drop
                     inst.heal_blacklist[target.GUID] = current_time + 90
                     inst.target_to_heal = nil
                 end
             end
         else
-            -- Clear target if invalid state
             inst.target_to_heal = nil
         end
     end
@@ -218,8 +228,8 @@ local function fn()
     end)
 
     inst:AddComponent("locomotor")
-    inst.components.locomotor.walkspeed = 4.5
-    inst.components.locomotor.runspeed = 5
+    inst.components.locomotor.walkspeed = 7
+    inst.components.locomotor.runspeed = 10
     inst.components.locomotor:SetAllowPlatformHopping(true)
 
     inst:SetStateGraph("SGwiltolionthingy")

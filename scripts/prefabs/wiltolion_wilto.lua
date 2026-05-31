@@ -133,8 +133,15 @@ local function ShouldFleeForSurvival(inst)
 
     -- Panic thresholds: 15% with armor, 30% without armor
     if (has_armor and hp_percent <= 0.15) or (not has_armor and hp_percent <= 0.30) then
-        if inst.components.talker and math.random() < 0.05 then
-            inst.components.talker:Say(GetRandomItem(speech.COMBAT_FLEE))
+        local current_time = GetTime()
+        
+        -- Apply a 15-second cooldown to prevent dialogue spam
+        if inst._last_flee_talk == nil or (current_time - inst._last_flee_talk) > 15 then
+            inst._last_flee_talk = current_time
+            
+            if inst.components.talker and speech ~= nil and speech.COMBAT_FLEE ~= nil then
+                inst.components.talker:Say(GetRandomItem(speech.COMBAT_FLEE))
+            end
         end
         return true
     end
