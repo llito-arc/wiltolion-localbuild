@@ -13,6 +13,13 @@ GLOBAL.STRINGS.CHARACTERS.WILTOLION.ACTIONFAIL.TRAVEL_PYLON = GLOBAL.STRINGS.CHA
 -- ==========================================
 AddClientModRPCHandler("Wiltolion", "OpenJournalUI", function(state_str)
     if GLOBAL.ThePlayer and GLOBAL.ThePlayer.HUD then
+        
+        -- TOGGLE LOGIC: If the menu is already open, close it and abort opening a new one.
+        if GLOBAL.ThePlayer.HUD.wilto_radial_menu ~= nil then
+            GLOBAL.ThePlayer.HUD.wilto_radial_menu:Close()
+            return
+        end
+
         local parts = {}
         for chunk in GLOBAL.string.gmatch(state_str, "([^_]+)") do
             GLOBAL.table.insert(parts, chunk)
@@ -22,16 +29,22 @@ AddClientModRPCHandler("Wiltolion", "OpenJournalUI", function(state_str)
         local tokens = GLOBAL.tonumber(parts[2]) or 0
         local points = GLOBAL.tonumber(parts[3]) or 0
 
-        local p_up = GLOBAL.string.sub(toggles, 1, 1) == "1"
-        local p_chop = GLOBAL.string.sub(toggles, 2, 2) == "1"
-        local p_mine = GLOBAL.string.sub(toggles, 3, 3) == "1"
-        local p_dig = GLOBAL.string.sub(toggles, 4, 4) == "1"
-        local p_fight = GLOBAL.string.sub(toggles, 5, 5) == "1"
-        local p_give = GLOBAL.string.sub(toggles, 6, 6) == "1"
+        local p_up      = GLOBAL.string.sub(toggles, 1, 1) == "1"
+        local p_chop    = GLOBAL.string.sub(toggles, 2, 2) == "1"
+        local p_mine    = GLOBAL.string.sub(toggles, 3, 3) == "1"
+        local p_dig     = GLOBAL.string.sub(toggles, 4, 4) == "1"
+        local p_fight   = GLOBAL.string.sub(toggles, 5, 5) == "1"
+        local p_give    = GLOBAL.string.sub(toggles, 6, 6) == "1"
         local p_harvest = GLOBAL.string.sub(toggles, 7, 7) == "1" 
         
-        -- Correct UI approach: Triggering via HUD
-        GLOBAL.ThePlayer.HUD:OpenWiltoJournalScreen(p_up, p_chop, p_mine, p_dig, p_fight, p_give, p_harvest, tokens, points)
+        local WiltoRadialMenu = require("widgets/wilto_radial_menu")
+        
+        -- ATTACH TO HUD CONTROLS
+        -- Instead of pushing a modal screen, we add it as a child to the HUD's control layer
+        local menu = WiltoRadialMenu(GLOBAL.ThePlayer, p_up, p_chop, p_mine, p_dig, p_fight, p_give, p_harvest, tokens, points)
+        
+        -- Store reference so we can check if it's open later
+        GLOBAL.ThePlayer.HUD.wilto_radial_menu = GLOBAL.ThePlayer.HUD.controls:AddChild(menu)
     end
 end)
 
@@ -394,7 +407,8 @@ end)
 -- JOURNAL READ (SERVER)
 AddStategraphState("wilson", GLOBAL.State({
     name = "wilto_journal_read",
-    tags = { "doing", "busy" },
+    -- Removed "busy" tag. Now the locomotor can interrupt this state if the player moves.
+    tags = { "doing" },
 
     onenter = function(inst)
         inst.components.locomotor:Stop()
@@ -413,13 +427,16 @@ AddStategraphState("wilson", GLOBAL.State({
             if inst.AnimState:AnimDone() then inst.sg:GoToState("idle") end
         end),
     },
-    onexit = function(inst) inst.AnimState:ClearOverrideBuild("wilto_journal_fx") end,
+    onexit = function(inst) 
+        inst.AnimState:ClearOverrideBuild("wilto_journal_fx") 
+    end,
 }))
 
 -- JOURNAL READ (CLIENT)
 AddStategraphState("wilson_client", GLOBAL.State({
     name = "wilto_journal_read",
-    tags = { "doing", "busy" },
+    -- Removed "busy" tag to match server side and allow movement prediction to interrupt.
+    tags = { "doing" },
     server_states = { "wilto_journal_read" }, 
 
     onenter = function(inst)

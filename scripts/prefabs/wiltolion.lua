@@ -496,10 +496,11 @@ local common_postinit = function(inst)
     inst.MiniMapEntity:SetIcon("wiltolion.tex")
     inst:AddTag("wiltolion") 
     inst:AddTag("has_light") 
-    inst:AddTag("monster")
-    inst:AddTag("playermonster")
+    --inst:AddTag("monster")
+    --inst:AddTag("playermonster")
     inst._net_heat_power = net_byte(inst.GUID, "wiltolion.heat_power", "heatpowerdirty")
     inst._net_alter_tokens = net_byte(inst.GUID, "wiltolion.alter_tokens", "altertokensdirty")
+    inst.IsOverheatingEffectBlocked = function() return true end
 end
 
 local master_postinit = function(inst)

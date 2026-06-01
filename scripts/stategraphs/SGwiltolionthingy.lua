@@ -99,58 +99,52 @@ local states =
     
     State{
         name = "aoe_heal_jump",
-        tags = {"busy", "jumping"}, -- "jumping" tag helps prevent standard stunlocks
+        tags = {"busy", "jumping"},
 
         onenter = function(inst)
-            -- Matches exact native API logic from SGspider.lua
             inst.Physics:Stop()
             inst.AnimState:PlayAnimation("heal") 
         end,
 
         timeline =
         {
-            -- Native sound timing
             TimeEvent(6*FRAMES, function(inst) 
                 inst.SoundEmitter:PlaySound(SoundPath(inst, "heal")) 
             end),
             
-            -- Native effect timing
             TimeEvent(30*FRAMES, function(inst)
                 inst.SoundEmitter:PlaySound("webber1/creatures/spider_cannonfodder/heal_fartcloud")
                 
                 local px, py, pz = inst.Transform:GetWorldPosition()
                 
-                -- Main visual effect
+                -- Global explosion visual FX centered on the spider
                 local fx = SpawnPrefab("spider_heal_target_fx")
                 if fx then
                     fx.Transform:SetPosition(px, py, pz)
                     fx.Transform:SetScale(2.5, 2.5, 2.5)
                 end
 
-                -- Native API AoE Search
-                local targets = TheSim:FindEntities(px, py, pz, 6, nil, { "INLIMBO", "playerghost", "hostile", "wone" }, { "player", "companion", "wiltolion_buddy", "wiltolion_wilto" })
-                
+                -- OPTIMIZATION: Passed {"_health"} as musttags to prevent server lag on massive 20 unit radius.
+                local targets = TheSim:FindEntities(px, py, pz, 20, { "_health" }, { "INLIMBO", "playerghost", "hostile", "wone" }, { "player", "companion", "wiltolion_buddy", "wiltolion_wilto" })
                 local current_time = GetTime()
 
                 for _, v in ipairs(targets) do
                     if v:IsValid() and v.components.health and not v.components.health:IsDead() then
-                        local is_blacklisted = inst.heal_blacklist and inst.heal_blacklist[v.GUID] and (inst.heal_blacklist[v.GUID] > current_time)
+                        inst.heal_blacklist = inst.heal_blacklist or {}
+                        local is_blacklisted = inst.heal_blacklist[v.GUID] and (inst.heal_blacklist[v.GUID] > current_time)
                         
                         if not is_blacklisted and v.components.health:GetPercent() < 0.99 then
                             local heal_power = 15
                             v.components.health:DoDelta(heal_power, false, inst.prefab)
                             
-                            -- Manage blacklist per entity healed in the AoE
-                            if inst.heal_blacklist then
-                                inst.heal_amounts = inst.heal_amounts or {}
-                                inst.heal_amounts[v.GUID] = (inst.heal_amounts[v.GUID] or 0) + heal_power
-                                
-                                if v.components.health:GetPercent() >= 0.55 or inst.heal_amounts[v.GUID] >= 150 then
-                                    inst.heal_blacklist[v.GUID] = current_time + 90
-                                end
+                            inst.heal_amounts = inst.heal_amounts or {}
+                            inst.heal_amounts[v.GUID] = (inst.heal_amounts[v.GUID] or 0) + heal_power
+                            
+                            if v.components.health:GetPercent() >= 0.55 or inst.heal_amounts[v.GUID] >= 150 then
+                                inst.heal_blacklist[v.GUID] = current_time + 90
                             end
 
-                            -- Visual feedback on healed targets
+                            -- Visual feedback directly on the healed target
                             local target_fx = SpawnPrefab("spider_heal_target_fx")
                             if target_fx then
                                 target_fx.Transform:SetPosition(v.Transform:GetWorldPosition())

@@ -3,21 +3,22 @@ local UIAnim = require "widgets/uianim"
 local Image = require "widgets/image"
 
 local AlterBadge = Class(Badge, function(self, owner)
-    -- Mantenemos el color azul
+    -- Keep the blue color
     Badge._ctor(self, nil, owner, { 0, 0.5, 1, 1 }, "status_meter", nil, nil, true)
 
-    -- Recuerda cambiar esto por tu icono personalizado cuando lo tengas
-    self.icon = self.underNumber:AddChild(Image("images/inventoryimages.xml", "moonrocknugget.tex"))
+    -- Load the custom compiled texture and its corresponding atlas
+    self.icon = self.underNumber:AddChild(Image("images/inventoryimages/wiltolion_gestalt.xml", "wiltolion_gestalt.tex"))
     
-    self.base_scale = 0.8
-    self.icon:SetScale(self.base_scale) 
+    -- A 128x128 image needs a much smaller scale to fit inside the native ring
+    self.base_scale = 0.45 
+    self.icon:SetScale(self.base_scale)
     self.icon:SetPosition(0, 0, 0)
     
     self:StartUpdating()
 end)
 
 function AlterBadge:OnUpdate(dt)
-    -- Visibilidad por Skilltree
+    -- Visibility driven by Skilltree tags
     if self.owner:HasTag("wiltolion_lunar_1") then
         self:Show()
     else

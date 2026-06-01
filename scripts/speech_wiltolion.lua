@@ -2710,27 +2710,27 @@ return {
         PETALS_EVIL = "Spooky shadow-petals. They smell like bad dreams.",
         PHLEGM = "Super-sticky, salty monster-boogers. Ew ew ew!",
         PICKAXE = "A heavy pointy-toy for smashing rocks!",
-        PIGGYBACK = "A backpack made out of a meanie-pig! It's spooky, but at least he can't hit me now.",
+        PIGGYBACK = "A backpack made out of a piggy! It has lots of room for toys!",
         PIGHEAD =
         {
-            GENERIC = "A meanie-pig head on a stick! It gives me the shivers.",
+            GENERIC = "A piggy head on a stick! It gives me the shivers.",
             BURNT = "A crispy burnt stick. It's way less scary now!",
         },
         PIGHOUSE =
         {
             FULL = "There's a grumpy snout in the window! I better stay away.",
             GENERIC = "A little wooden house where the oink-bullies live.",
-            LIGHTSOUT = "The meanie is taking a dark-nap. Shhh, don't wake him up!",
-            BURNT = "The bully's house had a giant fire-tantrum.",
+            LIGHTSOUT = "The piggy is taking a dark-nap. Shhh, don't wake him up!",
+            BURNT = "The piggy's house had a giant fire-tantrum.",
         },
-        PIGKING = "The giant boss of all the bullies! He's super greedy for shiny rocks.",
+        PIGKING = "The giant boss of all the piggies! He's super greedy for shiny toys.",
         PIGMAN =
         {
-            DEAD = "The grumpy oink-meanie took a forever-nap.",
-            FOLLOWER = "He's following me... is he playing tag, or is he going to bite my tail?",
-            GENERIC = "A walking piggy! But he's a big bully and always tries to hit me.",
-            GUARD = "A super-grumpy piggy-guard. He really doesn't like star-cubs!",
-            WEREPIG = "Ahhh! The meanie-piggy turned into a giant hairy monster-bully! Run!",
+            DEAD = "The grumpy piggy took a forever-nap.",
+            FOLLOWER = "piggy friend! He wants to follow me around and be my buddy!",
+            GENERIC = "A walking piggy! He looks grumpy.",
+            GUARD = "He really doesn't like star-cubs!",
+            WEREPIG = "Ahhh! The piggy turned into a giant hairy monster-bully! Run!",
         },
         PIGSKIN = "A piece of a piggy's coat. It still has the curly tail!",
         PIGTENT = "A stinky mud-tent for a fishy-frog.",
@@ -2823,7 +2823,7 @@ return {
             GENERIC = "That wooden statue looks exactly like Mr. Scientist!",
             BURNT = "Mr. Scientist got extra crispy.",
         },
-        RESURRECTIONSTONE = "A magic piggy-rock! It brings friends back from the forever-nap.",
+        RESURRECTIONSTONE = "It brings friends back to life! Wow!",
         ROBIN =
         {
             GENERIC = "A pretty little red flappy-bird!",

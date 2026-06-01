@@ -55,6 +55,8 @@ Assets = {
     Asset("IMAGE", "images/wiltolion_background.tex"),
     Asset("ATLAS", "images/inventoryimages/wiltolion_thingy.xml"),
     Asset("IMAGE", "images/inventoryimages/wiltolion_thingy.tex"),
+    Asset("ATLAS", "images/inventoryimages/wiltolion_gestalt.xml"),
+    Asset("IMAGE", "images/inventoryimages/wiltolion_gestalt.tex"),
 }
 
 for i = 1, 14 do

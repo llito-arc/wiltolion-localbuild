@@ -19,8 +19,10 @@ local brain = require("brains/wiltolionthingybrain")
 local function NormalRetarget(inst)
     local leader = inst.components.follower:GetLeader()
     return FindEntity(inst, 8, function(guy)
-        -- Never target the leader or anyone the leader is protecting
-        return guy ~= leader 
+        -- Added strict validity check for external target safety
+        return guy ~= nil 
+            and guy:IsValid() 
+            and guy ~= leader 
             and inst.components.combat:CanTarget(guy)
             and not (guy.components.follower and guy.components.follower:GetLeader() == leader)
     end, { "_combat", "_health" }, { "INLIMBO", "companion", "player" })
@@ -28,6 +30,7 @@ end
 
 local function keeptargetfn(inst, target)
    return target ~= nil
+        and target:IsValid()
         and target.components.combat ~= nil
         and target.components.health ~= nil
         and not target.components.health:IsDead()
@@ -45,7 +48,6 @@ local function RemoveBuff(target)
     
     target:RemoveTag("wiltolion_buffed")
 
-    -- Clean Combat modifiers
     if target.components.combat then
         if target.components.combat.externaldamagemultipliers then
             target.components.combat.externaldamagemultipliers:RemoveModifier(target, "wiltolion_spider_buff")
@@ -55,12 +57,10 @@ local function RemoveBuff(target)
         end
     end
 
-    -- Clean Speed modifiers
     if target.components.locomotor then
         target.components.locomotor:RemoveExternalSpeedMultiplier(target, "wiltolion_spider_buff")
     end
     
-    -- Clean the task if it was called manually or by an event
     if target.spider_buff_task ~= nil then
         target.spider_buff_task:Cancel()
         target.spider_buff_task = nil
@@ -68,31 +68,24 @@ local function RemoveBuff(target)
 end
 
 local function ApplyBuff(inst, target)
-    -- STRICT CHECKS: Ensure the target is valid, alive, and doesn't already have the buff
     if not target or not target:IsValid() or target:HasTag("wiltolion_buffed") then
         return
     end
     if target:HasTag("playerghost") or target:HasTag("INLIMBO") or target:HasTag("structure") or target:HasTag("wall") then
         return
     end
-    if not target.components.health or target.components.health:IsDead() then
-        return
-    end
-    if not target.components.combat then
+    if not target.components.health or target.components.health:IsDead() or not target.components.combat then
         return
     end
 
-    -- Mark as actively buffed
     target:AddTag("wiltolion_buffed")
 
-    -- Visual effects
     local target_fx = SpawnPrefab("spider_heal_target_fx")
     if target_fx then
         target_fx.Transform:SetPosition(target.Transform:GetWorldPosition())
         target_fx.Transform:SetScale(1.2, 1.2, 1.2)
     end
 
-    -- Apply Modifiers
     if target.components.combat.externaldamagemultipliers then
         target.components.combat.externaldamagemultipliers:SetModifier(target, 1.15, "wiltolion_spider_buff")
     end
@@ -101,7 +94,6 @@ local function ApplyBuff(inst, target)
         local current_mult = target.components.combat.externaldamagetakenmultipliers:Get()
         local defense_modifier = 0.85
         
-        -- Smart defense: Apply heavy armor only if it's a weak minion (takes full damage)
         if current_mult >= 1.0 and not target:HasTag("player") then
             defense_modifier = 0.70 
         end
@@ -113,13 +105,10 @@ local function ApplyBuff(inst, target)
         target.components.locomotor:SetExternalSpeedMultiplier(target, "wiltolion_spider_buff", 1.15)
     end
     
-    -- SAFETY LISTENERS: Force buff removal if the entity dies or is unloaded
     target:ListenForEvent("death", RemoveBuff)
     target:ListenForEvent("onremove", RemoveBuff)
     
-    -- Task management (120 seconds)
     target.spider_buff_task = target:DoTaskInTime(120, function(t)
-        -- Remove listeners to prevent memory leaks, then remove buff
         t:RemoveEventCallback("death", RemoveBuff)
         t:RemoveEventCallback("onremove", RemoveBuff)
         RemoveBuff(t)
@@ -127,14 +116,13 @@ local function ApplyBuff(inst, target)
 end
 
 -- ==========================================================
--- DUAL TICKS (BUFF AND HEAL SEPARATED)
+-- DUAL TICKS (BUFF AND HEAL)
 -- ==========================================================
 local function OnBuffTick(inst)
     local px, py, pz = inst.Transform:GetWorldPosition()
-    local allies = TheSim:FindEntities(px, py, pz, 24, nil, { "INLIMBO", "playerghost", "hostile" }, { "player", "companion", "wiltolion_buddy", "wiltolion_wilto" })
+    local allies = TheSim:FindEntities(px, py, pz, 24, { "_health" }, { "INLIMBO", "playerghost", "hostile" }, { "player", "companion", "wiltolion_buddy", "wiltolion_wilto" })
     
     for _, ally in ipairs(allies) do
-        -- Ya no aplicamos incondicionalmente. ApplyBuff se encarga de filtrar si ya lo tienen.
         if ally:IsValid() and ally.components.health and not ally.components.health:IsDead() then
             ApplyBuff(inst, ally)
         end
@@ -144,6 +132,7 @@ end
 local function OnHealTick(inst)
     local current_time = GetTime()
 
+    -- 1. Safely clean expired blacklist entries
     if inst.heal_blacklist then
         for guid, expire_time in pairs(inst.heal_blacklist) do
             if current_time >= expire_time then
@@ -155,25 +144,29 @@ local function OnHealTick(inst)
         end
     end
 
+    -- 2. Execute healing trigger logic
     local target = inst.target_to_heal
-    if target and target:IsValid() then
-        if target.components.health and not target.components.health:IsDead() and not target:HasTag("playerghost") then
-            if inst:IsNear(target, 4) then
+    
+    if target and target:IsValid() and not target:HasTag("playerghost") then
+        if target.components.health and not target.components.health:IsDead() then
+            -- Trigger jump when inside the safe Brain radius (14 units)
+            if inst:IsNear(target, 14) then
                 local hp_pct = target.components.health:GetPercent()
                 
                 if hp_pct < 0.55 then
-                    -- Trigger the AoE Jump State instead of direct healing
                     inst:PushEvent("do_aoe_heal_jump")
-                    -- Drop target temporarily to avoid spamming the jump
                     inst.target_to_heal = nil 
                 else
-                    inst.heal_blacklist[target.GUID] = current_time + 90
+                    inst.heal_blacklist = inst.heal_blacklist or {}
+                    inst.heal_blacklist[target.GUID] = current_time + 30
                     inst.target_to_heal = nil
                 end
             end
         else
             inst.target_to_heal = nil
         end
+    else
+        inst.target_to_heal = nil
     end
 end
 
@@ -194,7 +187,6 @@ local function fn()
     inst.DynamicShadow:SetSize(1.5, .5)
     inst.Transform:SetFourFaced()
 
-    -- Optimized tags for pet
     inst:AddTag("companion")   
     inst:AddTag("NOBLOCK")      
     inst:AddTag("cavedweller")
@@ -212,15 +204,32 @@ local function fn()
         return inst
     end
 
-    -- Passive healing variables
     inst.heal_blacklist = {}
     inst.heal_amounts = {}
     inst.target_to_heal = nil
     
-    inst:DoPeriodicTask(20, OnBuffTick)
-    inst:DoPeriodicTask(2, OnHealTick)
+    -- Store tasks within the inst to manage them later
+    inst.buff_task = inst:DoPeriodicTask(20, OnBuffTick)
+    inst.heal_task = inst:DoPeriodicTask(2, OnHealTick)
+
+    -- Define a generic cleanup function to prevent memory leaks
+    local function OnRemoveThingy(spider)
+        if spider.buff_task ~= nil then
+            spider.buff_task:Cancel()
+            spider.buff_task = nil
+        end
+        if spider.heal_task ~= nil then
+            spider.heal_task:Cancel()
+            spider.heal_task = nil
+        end
+    end
+
+    -- Trigger cleanup when the spider dies or is despawned
+    inst:ListenForEvent("death", OnRemoveThingy)
+    inst:ListenForEvent("onremove", OnRemoveThingy)
 
     inst.AnimState:SetLightOverride(0.85)
+
     inst:DoPeriodicTask(4, function(spider)
         if spider.AnimState then
             spider.AnimState:SetLightOverride(0.85)
@@ -235,18 +244,17 @@ local function fn()
     inst:SetStateGraph("SGwiltolionthingy")
     
     inst:AddComponent("health")
-    inst.components.health:SetMaxHealth(TUNING.SPIDER_HEALER_HEALTH)
+    inst.components.health:SetMaxHealth(TUNING.SPIDER_HEALER_HEALTH or 400)
 
     inst:AddComponent("combat")
     inst.components.combat.hiteffectsymbol = "body"
-    inst.components.combat:SetDefaultDamage(TUNING.SPIDER_HEALER_DAMAGE)
-    inst.components.combat:SetAttackPeriod(TUNING.SPIDER_ATTACK_PERIOD)
+    inst.components.combat:SetDefaultDamage(TUNING.SPIDER_HEALER_DAMAGE or 20)
+    inst.components.combat:SetAttackPeriod(TUNING.SPIDER_ATTACK_PERIOD or 2)
     inst.components.combat:SetRetargetFunction(1, NormalRetarget)
     inst.components.combat:SetKeepTargetFunction(keeptargetfn)
 
     inst:AddComponent("follower")
     inst.components.follower.keepleaderonplayerdeath = true
-    -- FIX: Native flag required to keep following a ghost player
     inst.components.follower.keepdeadleader = true 
     inst.components.follower:KeepLeaderOnAttacked()
 
@@ -260,6 +268,7 @@ local function fn()
     inst.components.eater:SetCanEatHorrible()
     inst.components.eater:SetStrongStomach(true)
     inst.components.eater:SetCanEatRawMeat(true)
+    
     MakeMediumFreezableCharacter(inst, "body")
     MakeHauntablePanic(inst)
 
@@ -300,7 +309,6 @@ local function fn()
             
             if real_thingy then
                 real_thingy.thingy_spawn_time = GetTime()
-                
                 if real_thingy.sg then
                     real_thingy.sg:GoToState("born")
                 end

@@ -6,8 +6,8 @@ require "behaviours/faceentity"
 require "behaviours/standstill"
 
 local MAX_WANDER_DIST = 10
-local RUN_AWAY_DIST = 10     -- Increased for better survival
-local STOP_RUN_AWAY_DIST = 14 -- Increased for better survival
+local RUN_AWAY_DIST = 12
+local STOP_RUN_AWAY_DIST = 16
 
 local WiltolionThingyBrain = Class(Brain, function(self, inst)
     Brain._ctor(self, inst)
@@ -35,34 +35,51 @@ local function KeepFaceTargetFn(inst, target)
 end
 
 -- =========================================================
--- SURVIVAL LOGIC (Fleeing)
+-- SURVIVAL LOGIC
 -- =========================================================
 local function IsDanger(target, inst)
-    -- Never run away from players or other companions
-    if target:HasTag("player") or target:HasTag("companion") then 
+    -- Never flee from allies or non-combatants
+    if target:HasTag("player") or target:HasTag("companion") or target:HasTag("INLIMBO") then 
         return false 
     end
     
-    return target:HasTag("monster") or target:HasTag("hostile") or (target.components.combat and target.components.combat.target == inst)
+    -- Flee immediately from boss monsters to avoid massive AoE damage
+    if target:HasTag("epic") then
+        return true
+    end
+
+    -- Flee if the enemy is actively targeting the spider or its leader
+    local combat = target.components.combat
+    if combat ~= nil and combat.target ~= nil then
+        local leader = GetLeader(inst)
+        if combat.target == inst or combat.target == leader then
+            return true
+        end
+    end
+    
+    return false
 end
 
 -- =========================================================
--- HEALING LOGIC (Target acquisition)
+-- HEALING LOGIC
 -- =========================================================
+local HEAL_MUST_TAGS = { "_health" }
 local HEAL_CANT_TAGS = { "INLIMBO", "playerghost", "hostile", "wone" }
 local HEAL_MUSTONE_TAGS = { "player", "companion", "wiltolion_buddy", "wiltolion_wilto" }
 
 local function GetHealTarget(inst)
     local x, y, z = inst.Transform:GetWorldPosition()
-    local targets = TheSim:FindEntities(x, y, z, 15, { "_health" }, HEAL_CANT_TAGS, HEAL_MUSTONE_TAGS)
+    
+    -- Detect injured allies up to 20 units away
+    local targets = TheSim:FindEntities(x, y, z, 20, HEAL_MUST_TAGS, HEAL_CANT_TAGS, HEAL_MUSTONE_TAGS)
     
     local best_target = nil
-    local lowest_hp = 0.35
+    local lowest_hp = 0.55
     local current_time = GetTime()
 
     for _, target in ipairs(targets) do
         if target.components.health and not target.components.health:IsDead() then
-            -- Verify if the target is NOT blacklisted (or if the cooldown expired)
+            -- Safely verify the blacklist
             local is_blacklisted = inst.heal_blacklist and inst.heal_blacklist[target.GUID] and (inst.heal_blacklist[target.GUID] > current_time)
             
             if not is_blacklisted then
@@ -83,10 +100,10 @@ end
 -- =========================================================
 function WiltolionThingyBrain:OnStart()
     local root = PriorityNode({
-        -- 1. Basic Panic (Fire)
+        -- 1. Panic (Fire)
         WhileNode(function() return self.inst.components.burnable and self.inst.components.burnable:IsBurning() end, "OnFire", Panic(self.inst)),
 
-        -- 2. Passive Healing System (PRIORITIZED OVER FLEEING)
+        -- 2. Massive Healing System
         WhileNode(function() 
             local target = self.inst.target_to_heal
             if target ~= nil and (not target:IsValid() or target:HasTag("playerghost") or (target.components.health and target.components.health:IsDead())) then
@@ -98,23 +115,23 @@ function WiltolionThingyBrain:OnStart()
             return self.inst.target_to_heal ~= nil 
         end, "Needs Healing",
             PriorityNode({
-                -- Stand completely still to prepare the jump if within striking distance (10)
-                WhileNode(function() return self.inst:IsNear(self.inst.target_to_heal, 20) end, "Stand and Heal",
+                -- Stand still safely away from combat (14 units) to execute the massive 20-unit AoE heal
+                WhileNode(function() return self.inst:IsNear(self.inst.target_to_heal, 14) end, "Stand and Heal",
                     StandStill(self.inst)
                 ),
-                -- Follow the wounded target if they move out of jump range (Stops at 8)
-                Follow(self.inst, function() return self.inst.target_to_heal end, 0, 15, 22)
+                -- Approach target only enough to reach the 14-unit safe distance
+                Follow(self.inst, function() return self.inst.target_to_heal end, 0, 10, 20)
             }, 0.25)
         ),
 
-        -- 3. Survival (Run from danger only when not actively healing)
+        -- 3. Smart Survival
         RunAway(self.inst, { fn = IsDanger, tags = {"_combat"}, notags = {"INLIMBO", "player", "companion"} }, RUN_AWAY_DIST, STOP_RUN_AWAY_DIST),
 
-        -- 4. Follow Leader (Default safe behavior)
+        -- 4. Follow Leader
         Follow(self.inst, GetLeader, 2, 4, 8),
         FaceEntity(self.inst, GetFaceTargetFn, KeepFaceTargetFn),
 
-        -- 5. Free Time (Wander nearby)
+        -- 5. Wander
         Wander(self.inst, function() return GetLeaderPos(self.inst) end, MAX_WANDER_DIST, nil, nil, nil, nil, { should_run = false, wander_dist = 4 })
     }, 0.25)
         

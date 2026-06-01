@@ -51,17 +51,6 @@ AddClassPostConstruct("components/container_replica", function(self)
 end)
 
 -- ==========================================
--- UI INJECTIONS
--- ==========================================
-AddClassPostConstruct("screens/playerhud", function(self)
-    self.OpenWiltoJournalScreen = function(self, p_up, p_chop, p_mine, p_dig, p_fight, p_give, p_harvest, tokens, points)
-        local WiltoJournalScreen = GLOBAL.require("screens/wiltojournalscreen")
-        self.wiltojournal = WiltoJournalScreen(self.owner, p_up, p_chop, p_mine, p_dig, p_fight, p_give, p_harvest, tokens, points)
-        GLOBAL.TheFrontEnd:PushScreen(self.wiltojournal)
-    end
-end)
-
--- ==========================================
 -- SISTEMA DE RANURAS: PILÓN GIRASOL
 -- ==========================================
 local containers = GLOBAL.require("containers")
