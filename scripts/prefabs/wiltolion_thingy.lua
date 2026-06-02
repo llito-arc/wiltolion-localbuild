@@ -187,6 +187,16 @@ local function fn()
     inst.DynamicShadow:SetSize(1.5, .5)
     inst.Transform:SetFourFaced()
 
+    inst.entity:AddLight()
+
+    inst.Light:SetRadius(1.5)      
+    inst.Light:SetFalloff(1)     
+    inst.Light:SetIntensity(0.4)   
+
+    inst.Light:SetColour(255/255, 230/255, 150/255) 
+
+    inst.Light:Enable(true)
+
     inst:AddTag("companion")   
     inst:AddTag("NOBLOCK")      
     inst:AddTag("cavedweller")

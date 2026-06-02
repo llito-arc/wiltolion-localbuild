@@ -149,12 +149,23 @@ end
 
 local function fn()
     local inst = CreateEntity()
+
     inst.entity:AddTransform()
     inst.entity:AddAnimState()
     inst.entity:AddSoundEmitter()
     inst.entity:AddNetwork()
 
-    -- [NUEVO] Le dice al juego que voltee a la mosquita al moverse
+    inst.entity:AddLight()
+
+    inst.Light:SetRadius(0.5)      
+    inst.Light:SetFalloff(1)     
+    inst.Light:SetIntensity(0.3)   
+
+    inst.Light:SetColour(255/255, 230/255, 150/255) 
+
+    inst.Light:Enable(true)
+
+    -- Le dice al juego que voltee a la mosquita al moverse
     inst.Transform:SetFourFaced()
 
     -- 1. FÍSICA DE VUELO (Ignora el agua y los bordes)
@@ -209,6 +220,17 @@ local function fn()
 
     inst:AddComponent("health")
     inst.components.health:SetMaxHealth(150)
+
+
+    inst.entity:AddLight()
+
+    inst.Light:SetRadius(1)      
+    inst.Light:SetFalloff(0.7)     
+    inst.Light:SetIntensity(0.6)   
+
+    inst.Light:SetColour(255/255, 230/255, 150/255) 
+
+    inst.Light:Enable(true)
 
     inst:AddComponent("combat")
     inst.components.combat:SetDefaultDamage(10)

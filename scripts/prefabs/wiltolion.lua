@@ -185,14 +185,38 @@ end
 
 
 -- ===========================================================================
---                         SECTION 4: THERMAL & LIGHT LOGIC (CORE REWORK)
+--                         SECTION 4: THERMAL & LIGHT LOGIC
 -- ===========================================================================
 
 -- 1. Configuration Table for Day Phases
 local PHASE_STATS = {
     day   = { dmg = 1.25, spd = 1.10, dap = TUNING.DAPPERNESS_SMALL, light_mult = 1.0, color = {255/255, 230/255, 150/255}, override = 0.25 },
-    dusk  = { dmg = 1.00, spd = 1.0, dap = 0,                       light_mult = 0.75, color = {255/255, 200/255, 120/255}, override = 0.35 },
-    night = { dmg = 0.85, spd = 0.9, dap = -TUNING.DAPPERNESS_MED,  light_mult = 0.55, color = {200/255, 150/255,  50/255}, override = 1.0 }
+    dusk  = { dmg = 1.00, spd = 1.0, dap = 0,                        light_mult = 0.75, color = {255/255, 200/255, 120/255}, override = 0.35 },
+    night = { dmg = 0.85, spd = 0.9, dap = -TUNING.DAPPERNESS_MED,   light_mult = 0.55, color = {200/255, 150/255,  50/255}, override = 1.0 }
+}
+
+-- ===========================================================================
+--                         SECTION 4.1: LIGHT CONFIGURATION
+-- ===========================================================================
+local LIGHT_CFG = {
+    INNER = {
+        RAD_MAX = 6.5,  
+        RAD_MIN = 1.5,
+        INT_MAX = 0.8,
+        INT_MIN = 0.0,
+        FALLOFF_MAX = 0.4, 
+        FALLOFF_MIN = 0.7,
+    },
+    OUTER = {
+        -- Massive radius to cover multiple tiles
+        RAD_MAX = 22.0, 
+        RAD_MIN = 5.0,
+        -- Moderate intensity, but the high falloff will dilute it quickly
+        INT_MAX = 0.65, 
+        INT_MIN = 0.0,
+        -- 0.95 creates an extremely smooth, barely noticeable gradient
+        FALLOFF = 0.95, 
+    }
 }
 
 local function GetCurrentPhaseStats()
@@ -204,17 +228,31 @@ end
 -- 2. Smooth Light Transition
 local function SmoothLight(inst)
     if not inst:IsValid() then return end
+    
+    -- LERP Inner Light
     inst._cur_rad = Lerp(inst._cur_rad or 0, inst._tgt_rad or 0, 0.15)
     inst._cur_int = Lerp(inst._cur_int or 0, inst._tgt_int or 0, 0.15)
-    inst._cur_ovr = Lerp(inst._cur_ovr or 0, inst._tgt_ovr or 0, 0.15)
-    
-    -- Smooth transition for the gradient curve
     inst._cur_falloff = Lerp(inst._cur_falloff or 0.5, inst._tgt_falloff or 0.5, 0.15)
+    inst._cur_ovr = Lerp(inst._cur_ovr or 0, inst._tgt_ovr or 0, 0.15)
     
     inst.Light:SetRadius(inst._cur_rad)
     inst.Light:SetIntensity(inst._cur_int)
     inst.Light:SetFalloff(inst._cur_falloff)
     inst.AnimState:SetLightOverride(inst._cur_ovr)
+
+    -- Disable the C++ engine renderer ONLY when visually completely black
+    inst.Light:Enable(inst._cur_int > 0.001)
+
+    -- LERP Outer Light
+    if inst._outer_light_ent ~= nil and inst._outer_light_ent:IsValid() then
+        inst._cur_out_rad = Lerp(inst._cur_out_rad or 0, inst._tgt_out_rad or 0, 0.15)
+        inst._cur_out_int = Lerp(inst._cur_out_int or 0, inst._tgt_out_int or 0, 0.15)
+        
+        inst._outer_light_ent.Light:SetRadius(inst._cur_out_rad)
+        inst._outer_light_ent.Light:SetIntensity(inst._cur_out_int)
+        
+        inst._outer_light_ent.Light:Enable(inst._cur_out_int > 0.001)
+    end
 end
 
 -- 3. Core Logic Loop (Runs every 1 second)
@@ -391,23 +429,34 @@ local function UpdateThermalAndLight(inst)
 
     if core_pct <= 0 then temp_mult = 0 end
 
-    inst.Light:Enable(temp_mult > 0)
+    -- Set exact colors but DO NOT touch the Enable() function here.
+    -- SmoothLight will handle the shutdown process.
     inst.Light:SetColour(unpack(phase.color))
-
-    -- Keep the balanced radius we defined earlier
-    inst._tgt_rad = base_radius * phase.light_mult * temp_mult
-    
-    -- High intensity creates a very solid, bright core around the player
-    inst._tgt_int = 0.8 * temp_mult
-    
-    -- Falloff smooths out the transition. 
-    -- 0.4 keeps the core bright but smoothly fades it before reaching the edge.
-    if core_pct > 0 then
-        inst._tgt_falloff = Lerp(0.6, 0.4, core_pct)
-    else
-        inst._tgt_falloff = 0.7
+    if inst._outer_light_ent ~= nil and inst._outer_light_ent:IsValid() then
+        inst._outer_light_ent.Light:SetColour(unpack(phase.color))
     end
 
+    -- Calculate LERP Targets for dual lighting
+    if core_pct > 0 then
+        -- Inner light target
+        local inner_base_rad = Lerp(LIGHT_CFG.INNER.RAD_MIN, LIGHT_CFG.INNER.RAD_MAX, core_pct)
+        inst._tgt_rad = inner_base_rad * phase.light_mult * temp_mult
+        inst._tgt_int = LIGHT_CFG.INNER.INT_MAX * temp_mult
+        inst._tgt_falloff = Lerp(LIGHT_CFG.INNER.FALLOFF_MIN, LIGHT_CFG.INNER.FALLOFF_MAX, core_pct)
+        
+        -- Outer light target
+        local outer_base_rad = Lerp(LIGHT_CFG.OUTER.RAD_MIN, LIGHT_CFG.OUTER.RAD_MAX, core_pct)
+        inst._tgt_out_rad = outer_base_rad * phase.light_mult * temp_mult
+        inst._tgt_out_int = LIGHT_CFG.OUTER.INT_MAX * temp_mult
+    else
+        -- When extinguished, set target arrays to 0. 
+        -- The Lerp curve will naturally slide down to 0 smoothly.
+        inst._tgt_rad, inst._tgt_int = 0, 0
+        inst._tgt_out_rad, inst._tgt_out_int = 0, 0
+        inst._tgt_falloff = LIGHT_CFG.INNER.FALLOFF_MIN
+    end
+
+    -- Apply visual night vision override
     if phase == PHASE_STATS.night and temp_mult < 0.2 then
         inst._tgt_ovr = temp_mult * 5
     else
@@ -533,22 +582,35 @@ local master_postinit = function(inst)
     end
     
     -- ==========================================
-    -- CORE SETUP
+    -- CORE SETUP (Lighting Initialization)
     -- ==========================================
     inst.starting_inventory = start_inv[TheNet:GetServerGameMode()] or start_inv.default
     inst.soundsname = "wiltolionevent"
     inst.talker_path_override = "customvoice/"
 
+    -- 1. Main Player Light
     inst.entity:AddLight()
-
     inst._cur_rad, inst._tgt_rad = 0, 0
     inst._cur_int, inst._tgt_int = 0, 0
     inst._cur_ovr, inst._tgt_ovr = 0, 0
-    
-    -- Initialize falloff variables with a neutral gradient
     inst._cur_falloff, inst._tgt_falloff = 0.5, 0.5
 
-    inst._sparks_task = nil 
+    -- 2. Secondary Ambient Light (Follower Entity)
+    -- FIX: We now spawn a properly registered networked prefab
+    local outer_light = SpawnPrefab("wiltolion_outer_light")
+    
+    if outer_light ~= nil then
+        -- Attach to player
+        outer_light.entity:SetParent(inst.entity)
+        inst:AddChild(outer_light) 
+        
+        -- Store reference and setup tracking variables
+        inst._outer_light_ent = outer_light
+        inst._cur_out_rad, inst._tgt_out_rad = 0, 0
+        inst._cur_out_int, inst._tgt_out_int = 0, 0
+    end
+
+    inst._sparks_task = nil
     
     inst.components.health:SetMaxHealth(TUNING.WILTOLION_HEALTH)
     inst.components.hunger:SetMax(TUNING.WILTOLION_HUNGER)

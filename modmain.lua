@@ -3,6 +3,7 @@
 -- ==========================================
 PrefabFiles = {
     "wiltolion",
+    "wiltolion_outer_light",
     "wiltolion_none",
     "wiltolion_torus",
     "wiltolion_sundrop",
