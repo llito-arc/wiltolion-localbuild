@@ -26,6 +26,8 @@ Assets = {
     Asset("ATLAS", "images/selectscreen_portraits/wiltolion_silho.xml" ),
     Asset("IMAGE", "bigportraits/wiltolion.tex" ),
     Asset("ATLAS", "bigportraits/wiltolion.xml" ),
+    Asset("IMAGE", "bigportraits/wiltolion_none.tex" ),
+    Asset("ATLAS", "bigportraits/wiltolion_none.xml" ),
     Asset("IMAGE", "images/map_icons/wiltolion.tex" ),
     Asset("ATLAS", "images/map_icons/wiltolion.xml" ),
     Asset("IMAGE", "images/avatars/avatar_wiltolion.tex" ),
@@ -108,6 +110,14 @@ modimport("scripts/modmain/wiltolion_visuals.lua")
 modimport("scripts/modmain/wiltolion_affinities.lua")
 
 local _G = GLOBAL
+
+-- ==========================================
+-- MODDED SKINS API COMPATIBILITY
+-- Workshop ID: 2812783478
+-- ==========================================
+if GLOBAL.KnownModIndex:IsModEnabled("workshop-2812783478") then
+    table.insert(PrefabFiles, "wiltolion_modded_skins")
+end
 
 -- 2. Hook the internal function to inject your custom background
 local old_GetSkilltreeBG = _G.GetSkilltreeBG
