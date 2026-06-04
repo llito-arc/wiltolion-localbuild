@@ -828,18 +828,26 @@ local function ShouldRetreatFromCombat(inst)
 end
 
 local function IsDangerTarget(inst, target)
-    -- Fast exit if not in panic mode
-    if inst.ShouldFleeForSurvival == nil or not inst:ShouldFleeForSurvival() then 
+    -- 1. Evaluate if Wilto should be in a fleeing state
+    -- True if he is naturally panicking OR if his combat toggle is explicitly turned off
+    local is_panic_mode = inst.ShouldFleeForSurvival ~= nil and inst:ShouldFleeForSurvival()
+    local is_pacifist_mode = inst.wilto_toggles ~= nil and inst.wilto_toggles.fight == false
+    
+    -- Fast exit if he doesn't need to flee
+    if not (is_panic_mode or is_pacifist_mode) then 
         return false 
     end
     
-    -- Ally shield: Never flee from players or companions
-    if target:HasTag("player") or target:HasTag("companion") then 
+    -- 2. Ally shield: Never treat players, companions, or inventory items as danger
+    if target:HasTag("player") or target:HasTag("companion") or target:HasTag("INLIMBO") then 
         return false 
     end
     
-    -- Flee from monsters or entities actively targeting Wilto
-    return target:HasTag("monster") or (target.components.combat ~= nil and target.components.combat.target == inst)
+    -- 3. Identify actual danger: Monsters, hostiles, or entities actively targeting Wilto
+    local is_monster = target:HasTag("monster") or target:HasTag("hostile")
+    local is_targeting_me = target.components.combat ~= nil and target.components.combat.target == inst
+    
+    return is_monster or is_targeting_me
 end
 
 local function GetCheatKiteEvasionTarget(inst, hunter)

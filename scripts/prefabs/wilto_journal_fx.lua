@@ -10,7 +10,7 @@ local function fn()
     inst.entity:AddNetwork()
     inst:AddTag("FX")
 
-    -- Nombres basados en tus cambios del SCML
+    -- Names based on your SCML changes
     inst.AnimState:SetBank("wilto_journal_fx")
     inst.AnimState:SetBuild("wilto_journal_fx")
     inst.AnimState:PlayAnimation("peruse")
@@ -22,7 +22,7 @@ local function fn()
     end
 
     inst.persists = false
-    -- Cuando la animación acabe, se borra solo
+    -- When animation ends, it deletes itself
     inst:ListenForEvent("animover", inst.Remove)
 
     return inst

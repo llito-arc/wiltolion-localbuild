@@ -4,7 +4,7 @@ local function TryRepeatAction(inst, buffaction, right)
 	if buffaction ~= nil and
 		buffaction:IsValid() and
 		buffaction.target ~= nil and
-        buffaction.target:IsValid() and -- ¡CÓDIGO A PRUEBA DE FALLOS AQUÍ!
+        buffaction.target:IsValid() and -- FAILSAFE CODE HERE!
 		buffaction.target.components.workable ~= nil and
 		buffaction.target.components.workable:CanBeWorked() and
 		buffaction.target:IsActionValid(buffaction.action, right)
@@ -136,7 +136,7 @@ local states =
 			inst.Physics:Stop()
 			inst.AnimState:PlayAnimation("idle_loop", true)
             
-            -- EFECTO MASIVO DE INVOCACIÓN
+            -- MASSIVE INVOCATION EFFECT
             local x, y, z = inst.Transform:GetWorldPosition()
             
             local fx1 = SpawnPrefab("halloween_firepuff_1")
@@ -404,15 +404,14 @@ local states =
 		onenter = function(inst, target)
 			inst.components.locomotor:Stop()
             
-			-- Revisamos si tiene algo en las manos
 			local weapon = inst.components.inventory and inst.components.inventory:GetEquippedItem(EQUIPSLOTS.HANDS)
 			
 			if weapon ~= nil then
-				-- Si tiene arma, usa la animación de ataque normal
+				-- If has weapon, use normal attack animation
 				inst.AnimState:PlayAnimation("atk_pre")
 				inst.AnimState:PushAnimation("atk", false)
 			else
-				-- Si está desarmado, usa la animación de puñetazo
+				-- If unarmed, use punch animation
 				inst.AnimState:PlayAnimation("punch")
 			end
 
@@ -468,7 +467,6 @@ local states =
             inst.AnimState:PlayAnimation("death")
         end,
 
-        -- Hemos borrado el 'timeline' que daba error
 
         events =
         {
@@ -478,7 +476,6 @@ local states =
                         inst.components.inventory:DropEverything(true)
                     end
                     
-                    -- EFECTO MASIVO AL DESAPARECER
                     local x, y, z = inst.Transform:GetWorldPosition()
                     
                     local fx1 = SpawnPrefab("halloween_firepuff_1")
@@ -491,7 +488,6 @@ local states =
                     
                     inst.SoundEmitter:PlaySound("dontstarve/common/fireAddFuel")
                     
-                    -- Hemos borrado las funciones raras aquí también
                     inst:Remove()
                 end
             end),
@@ -853,7 +849,7 @@ local states =
 		},
 	},
     
-    -- Los estados de recoil (retroceso) son útiles visualmente para golpes normales
+    -- recoil states for mining and attacking, using the same logic but different animations and tags to differentiate them
 	State{
 		name = "mine_recoil",
 		tags = { "busy", "recoil" },

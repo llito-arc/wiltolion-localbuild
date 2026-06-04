@@ -1,11 +1,21 @@
 -- This information tells other players more about the mod
 name = "Wiltolion"
+
 description = [[
-You can get all the info at the steam workshop
+󰀈 The Sun Lion arrives! 󰀈
+
+󰀏 You can find all the detailed info on the Steam Workshop page.
+
+󰀏 Main Features:
+󰀈 Dynamic Thermal Core mechanics with custom HUD badges.
+󰀅 Full Custom Skill Tree with 15 unlockable perks.
+󰀤 Exclusive equipment: The Sun Torus & Adventure Journal.
+󰀘 Summon light companions to fight and heal and other tasks!
+󰀝 Fast-travel across the world using Sunflower Pylons.
 ]]
 
 author = "llito"
-version = "1.0.0" -- Quitado el punto extra al final para que sea un formato limpio
+version = "1.0.0" 
 
 -- This is the URL name of the mod's thread on the forum; the part after the ? and before the first & in the url
 forumthread = ""
@@ -24,6 +34,7 @@ shipwrecked_compatible = false
 -- Character mods are required by all clients
 all_clients_require_mod = true 
 client_only_mod = false  -- Must be false because it's a character
+
 -- Add this to ensure it loads with priority
 priority = -1
 

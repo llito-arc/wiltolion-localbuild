@@ -54,9 +54,9 @@ local function fn()
     inst.Light:Enable(true)
 
     inst:AddTag("wiltolion_sundrop")
-    inst:AddTag("nosteal") -- Evita que monos o Krampus lo roben y crasheen
+    inst:AddTag("nosteal") -- Prevents monkeys or Krampus from stealing it and causing crashes
 
-    -- LÓGICA DE CLIENTE: Solo controlamos la luz y visibilidad en el inventario
+    -- CLIENT LOGIC: We only control the light and visibility in inventory
     inst:DoPeriodicTask(0.1, function(inst)
         if ThePlayer ~= nil and ThePlayer:HasTag("wiltolion") then
             local is_held = inst.replica.inventoryitem ~= nil and inst.replica.inventoryitem:IsHeld()
@@ -96,11 +96,11 @@ local function fn()
         if eater ~= nil and eater:IsValid() then
             local fx = SpawnPrefab("halloween_firepuff_1")
             if fx ~= nil then
-                -- Obtenemos la posición de quien se lo come (Wiltolion)
+                -- Get the position of who eats it (Wiltolion)
                 local x, y, z = eater.Transform:GetWorldPosition()
-                -- Subimos un poco la "Y" para que la chispa salga cerca de su boca/cabeza
+                -- Raise the "Y" a bit so the spark comes out near their mouth/head
                 fx.Transform:SetPosition(x, y + 1, z)
-                -- Reducimos su escala a la mitad para que sea "pequeñito"
+                -- Reduce its scale by half to make it "tiny"
                 fx.Transform:SetScale(0.5, 0.5, 0.5)
             end
         end
@@ -110,13 +110,23 @@ local function fn()
     inst.components.inventoryitem.imagename = "wiltolion_sundrop"
     inst.components.inventoryitem.atlasname = "images/inventoryimages/wiltolion_sundrop.xml"
     
-    -- ==========================================
-    -- LA MAGIA DE WORTOX:
-    -- ==========================================
-    --inst.components.inventoryitem.canonlygoinpocketorpocketcontainers = true
-    
     inst:AddComponent("stackable")
-    inst.components.stackable.maxsize = TUNING.STACK_SIZE_TINYITEM
+
+    -- ==========================================
+    -- REPLICA WORKAROUND (DO NOT DELETE)
+    -- Avoids LUA ERROR from client with stacks of 200/30
+    -- ==========================================
+    local _replica_SetMaxSize = inst.replica.stackable.SetMaxSize
+    inst.replica.stackable.SetMaxSize = function(self, maxsize)
+        if maxsize == 200 or maxsize == 50 then
+            self._ignoremaxsize:set(true)
+        else
+            _replica_SetMaxSize(self, maxsize)
+        end
+    end
+
+    -- Default max stack size is 200
+    inst.components.stackable.maxsize = 200
 
     MakeHauntableLaunch(inst)
 
@@ -132,7 +142,7 @@ local function fn()
         end
     end)
 
-    -- DESAPARICIÓN
+    -- DISAPPEARANCE
     local function StopDespawnTimer(inst)
         if inst._despawn_task ~= nil then
             inst._despawn_task:Cancel()
@@ -143,7 +153,6 @@ local function fn()
     local function StartDespawnTimer(inst)
         StopDespawnTimer(inst)
         inst._despawn_task = inst:DoTaskInTime(15, function(inst)
-            -- NUEVA LÍNEA: Si el objeto está en un inventario, no lo borres.
             if inst.components.inventoryitem ~= nil and inst.components.inventoryitem:IsHeld() then
                 return
             end
@@ -159,27 +168,26 @@ local function fn()
 
     StartDespawnTimer(inst)
     inst:ListenForEvent("ondropped", StartDespawnTimer)
+
     -- ==========================================
-    -- FRASES AL QUEMARSE / SOLTAR EL SUNDROP
+    -- PHRASES WHEN BURNING / DROPPING THE SUNDROP
     -- ==========================================
     local drop_quotes = {
-        -- Personajes Base
         wilson = "Yowch! That completely defies the laws of thermodynamics!",
-        willow = "Aw, it's so warm! Why won't it stay in my hands?", -- No le duele, pero no puede retenerlo
+        willow = "Aw, it's so warm! Why won't it stay in my hands?", 
         wolfgang = "Ouch! Is like holding tiny angry sun!",
         wendy = "It burns... much like the fleeting illusion of hope.",
         wx78 = "ERROR: UNCONTAINABLE HEAT SOURCE DETECTED.",
         wickerbottom = "Goodness! The solar radiation is quite severe.",
         woodie = "Ouch! That's a spicy little ember, eh?",
-        wes = "", -- Wes es mudo, se salta el diálogo
+        wes = "", 
         maxwell = "Gah! Insolent little spark!",
         wigfrid = "Odin's beard! It burns with the fury of Muspelheim!",
         webber = "Owie! It burned our fuzzy hands!",
-        -- Personajes DLC / Expansiones
         winona = "Yeesh! That's a workplace hazard if I ever saw one.",
         warly = "Mon dieu! It's hotter than a boiling skillet!",
         wortox = "Hyuyu! Too spicy for my pockets!",
-        wormwood = "Aah! Hot! Hot! Hurts!", -- A Wormwood (planta) le aterra el fuego/calor
+        wormwood = "Aah! Hot! Hot! Hurts!", 
         wurt = "Glurgh! It burns the scales, florp!",
         walter = "Yikes! I need to review my first-aid badge for burns!",
         wanda = "Ouch! I don't have the time to deal with blistered hands!",
@@ -188,34 +196,53 @@ local function fn()
     local default_drop_quote = "Ouch! It's burning hot!"
 
     -- ==========================================
-    -- ANTI-ROBO (Para otros jugadores)
+    -- MASTER LOGIC: ANTI-THEFT AND CONTAINER CONTROL
     -- ==========================================
     inst:ListenForEvent("onputininventory", function(inst, owner)
         StopDespawnTimer(inst)
 
-        -- Gracias a la magia de Wortox, el "owner" SIEMPRE será el jugador, 
-        -- porque el motor ya prohibió que entrara en cofres o Chester.
-        if owner ~= nil and not owner:HasTag("wiltolion") then
-            inst:DoTaskInTime(0, function()
-                if owner.components.inventory ~= nil then
-                    owner.components.inventory:DropItem(inst, true, true)
-                end
-                if owner.components.talker ~= nil then
-                    -- Busca el nombre del personaje (owner.prefab) en la tabla
-                    -- Si no está en la tabla, usa la frase por defecto
-                    local quote = drop_quotes[owner.prefab] or default_drop_quote
+        if owner ~= nil then
+            -- 1. If it went into the PYLON
+            if owner.prefab == "wiltolion_pylon" then
+                inst.components.stackable.maxsize = 50
+                
+                local current_stack = inst.components.stackable:StackSize()
+                if current_stack > 50 then
+                    local excess_amount = current_stack - 50
+                    local excess_item = inst.components.stackable:Get(excess_amount)
                     
-                    -- Solo habla si la frase NO está vacía (esto protege a Wes)
-                    if quote ~= "" then
-                        owner.components.talker:Say(quote)
+                    if owner.components.container ~= nil then
+                        owner.components.container:DropItem(excess_item)
                     end
                 end
-            end)
+
+            -- 2. If it went directly into Wiltolion's inventory (pockets)
+            elseif owner:HasTag("player") and owner:HasTag("wiltolion") then
+                inst.components.stackable.maxsize = 200
+
+            -- 3. If it went into Backpacks, Chests, Chester, or any other player
+            else
+                inst:DoTaskInTime(0, function()
+                    -- We eject it regardless of whether it's an inventory or container
+                    if owner.components.inventory ~= nil then
+                        owner.components.inventory:DropItem(inst, true, true)
+                    elseif owner.components.container ~= nil then
+                        owner.components.container:DropItem(inst)
+                    end
+                    
+                    -- If whoever tried to grab it was a fake player or someone else, we make them talk
+                    if owner:HasTag("player") and owner.components.talker ~= nil then
+                        local quote = drop_quotes[owner.prefab] or default_drop_quote
+                        if quote ~= "" then
+                            owner.components.talker:Say(quote)
+                        end
+                    end
+                end)
+            end
         end
     end)
-    -- Cuando el motor termina de cargar el objeto desde el archivo de guardado
+
     inst.OnLoad = function(inst)
-        -- Si al cargar, el motor lo asignó a un dueño (está en un inventario)
         if inst.components.inventoryitem ~= nil and inst.components.inventoryitem.owner ~= nil then
             StopDespawnTimer(inst)
         end

@@ -59,13 +59,13 @@ local function attack_behaviour(inst, target)
     if inst.components.combat ~= nil then
         if inst.components.combat:CanTarget(target) then
             
-            -- MULTIPLICADOR ANTI-SOMBRAS: Si el objetivo es una sombra, doble daño.
+            -- ANTI-SHADOW MULTIPLIER: If target is a shadow, double damage.
             local is_shadow = target:HasTag("shadow") or target:HasTag("shadowcreature") or target:HasTag("shadowchesspiece") or target:HasTag("nightmarecreature")
             local mult = is_shadow and 2.0 or 1.0
             
             inst.components.combat:SetDefaultDamage(50 * mult)
 
-            -- Este trigger aplica tanto el daño base como el planar
+            -- This trigger applies both base and planar damage
             inst.components.combat:DoAttack(target)
             return true
         else
@@ -103,8 +103,8 @@ local FLY_START_TIME = 15 * FRAMES
 local FLY_END_TIME = 60 * FRAMES
 local TIME_TO_FLY = FLY_END_TIME - FLY_START_TIME - FRAMES
 
--- 3. Modificamos la función 'on_anim_over' para que el Gestalt
--- ajuste su rotación y busque al enemigo con más precisión.
+-- 3. We modify the 'on_anim_over' function so the Gestalt
+-- adjusts its rotation and searches for enemies more precisely.
 local function on_anim_over(inst)
     if inst.AnimState:IsCurrentAnimation("emerge") then
         if inst._target_pos ~= nil then

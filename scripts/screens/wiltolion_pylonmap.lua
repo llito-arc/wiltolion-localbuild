@@ -9,7 +9,7 @@ local PylonMapScreen = Class(Screen, function(self, owner, current_pylon, pylon_
     self.owner = owner
     self.current_pylon = current_pylon
 
-    -- 1. FONDO OSCURO (Más profundo para el contraste de brillo)
+    -- 1. DARK BACKGROUND (Deeper for brightness contrast)
     self.black = self:AddChild(Image("images/global.xml", "square.tex"))
     self.black:SetVRegPoint(ANCHOR_MIDDLE)
     self.black:SetHRegPoint(ANCHOR_MIDDLE)
@@ -38,13 +38,13 @@ local PylonMapScreen = Class(Screen, function(self, owner, current_pylon, pylon_
     -- ESCALA GLOBAL
     local MAP_SCALE = 0.35
 
-    -- 3. DIBUJAR LAS LÍNEAS 
+    -- 3. DRAW LINES
     self:DrawConstellations(pylon_data, MAP_SCALE)
 
     -- 4. DIBUJAR LOS GIRASOLES
     self:DrawStars(pylon_data, MAP_SCALE)
 
--- 5. BOTÓN CERRAR (Estética mejorada)
+-- 5. CLOSE BUTTON (Improved aesthetics)
     self.cancel_btn = self.root:AddChild(ImageButton("images/ui.xml", "button_large.tex", "button_large_over.tex", "button_large_disabled.tex"))
     
     self.cancel_btn:SetFont(UIFONT)
@@ -56,7 +56,7 @@ local PylonMapScreen = Class(Screen, function(self, owner, current_pylon, pylon_
     
     self.cancel_btn:SetScale(0.8) 
     
-    -- EL ARREGLO: Animación de "Pop" usando los eventos nativos seguros
+    -- THE FIX: "Pop" animation using safe native events
     local old_cancel_gain = self.cancel_btn.OnGainFocus
     self.cancel_btn.OnGainFocus = function(s)
         if old_cancel_gain then old_cancel_gain(s) end
@@ -74,7 +74,7 @@ local PylonMapScreen = Class(Screen, function(self, owner, current_pylon, pylon_
 end)
 
 function PylonMapScreen:DrawConstellations(pylon_data, map_scale)
-    -- En el modmain ya enviamos TODOS los pilones, así que usamos pylon_data directamente.
+    -- In the modmain we already sent ALL pylons, so we use pylon_data directly.
     local nodes = pylon_data
     
     for i = 1, #nodes do
@@ -91,11 +91,11 @@ function PylonMapScreen:DrawConstellations(pylon_data, map_scale)
             
             if dist > 0.1 then 
                 local angle = math.deg(math.atan2(y2 - y1, x2 - x1))
-                -- ¡Añadimos a map_root!
+                -- Add to map_root!
                 local line = self.map_root:AddChild(Image("images/global.xml", "square.tex"))
                 
-                line:SetTint(1, 1, 1, 0.5) -- Blanco con transparencia
-                line:SetSize(dist, 1)      -- Línea fina
+                line:SetTint(1, 1, 1, 0.5) -- White with transparency
+                line:SetSize(dist, 1)      -- Thin line
                 line:SetPosition((x1 + x2) / 2, (y1 + y2) / 2, 0)
                 line:SetRotation(-angle)
             end
@@ -106,12 +106,12 @@ end
 function PylonMapScreen:DrawStars(pylon_data, map_scale)
     local cx, cy, cz = self.current_pylon.Transform:GetWorldPosition()
 
-    -- === 1. DIBUJAR EL PILÓN ACTUAL (PUNTO DE ORIGEN) ===
-    -- EL PILÓN ACTUAL
+    -- === 1. DRAW THE CURRENT PYLON (ORIGIN POINT) ===
+    -- THE CURRENT PYLON
     local cur_x = cx * map_scale
     local cur_y = -cz * map_scale
 
-    -- ¡Añadimos a map_root!
+    -- Add to map_root!
     local origin_marker = self.map_root:AddChild(ImageButton("images/inventoryimages/wiltolion_pylon.xml", "wiltolion_pylon.tex"))
 
     origin_marker:SetPosition(cur_x, cur_y, 0)
@@ -130,7 +130,7 @@ function PylonMapScreen:DrawStars(pylon_data, map_scale)
     for i, data in ipairs(pylon_data) do
         local world_dist = math.sqrt((data.x - cx)^2 + (data.z - cz)^2)
 
-        -- FILTRO CRUCIAL: Solo dibujamos botón si está a más de 2 metros (evita solapamiento)
+        -- CRUCIAL FILTER: Only draw button if more than 2 meters away (avoids overlap)
         if world_dist > 2 then
             local dx = data.x * map_scale
             local dy = -data.z * map_scale
@@ -142,12 +142,12 @@ function PylonMapScreen:DrawStars(pylon_data, map_scale)
             
             star_btn:SetPosition(dx, dy, 0)
             star_btn:SetScale(0.35) 
-            star_btn.image:SetTint(0.4, 0.4, 0.4, 1) -- Grisáceo por defecto
+            star_btn.image:SetTint(0.4, 0.4, 0.4, 1) -- Grayish by default
 
             -- Tooltip con la distancia
             star_btn:SetHoverText("Travel (" .. math.floor(world_dist) .. "m)")
 
-            -- Animación de foco (Zoom sutil e iluminado)
+            -- Focus animation (Subtle zoom and lighting)
             local old_gain = star_btn.OnGainFocus
             star_btn.OnGainFocus = function(s)
                 if old_gain then old_gain(s) end
@@ -163,12 +163,12 @@ function PylonMapScreen:DrawStars(pylon_data, map_scale)
             end
 
             star_btn:SetOnClick(function()
-                -- 1. Enviamos la petición de viaje y el cobro de energía al servidor
+                -- 1. Send travel request and energy charge to server
                 SendModRPCToServer(MOD_RPC["Wiltolion"]["TravelToPylon"], self.current_pylon, data.x, data.z)
                 
-                -- 2. EL PARCHE ANTI-LAG: 
-                -- Obligamos a nuestro juego local a iniciar la animación en este mismo frame, 
-                -- sin esperar a que el servidor conteste.
+                -- 2. THE ANTI-LAG PATCH:
+                -- Force our local game to start the animation in this frame,
+                -- without waiting for server response.
                 if self.owner and self.owner.sg then
                     self.owner.sg:GoToState("wiltolion_pylon_travel")
                 end
@@ -190,15 +190,15 @@ function PylonMapScreen:OnControl(control, down)
         end
     end
     
-    -- === CONTROLES DE ZOOM ===
-    -- Rueda hacia adelante: Acercar (Zoom In)
+    -- === ZOOM CONTROLS ===
+    -- Scroll forward: Zoom In
     if control == CONTROL_SCROLLFWD then
-        self.zoom_level = math.min(3.0, self.zoom_level + 0.15) -- Límite de x3
+        self.zoom_level = math.min(3.0, self.zoom_level + 0.15) -- Limit of x3
         self.map_root:SetScale(self.zoom_level)
         return true
-    -- Rueda hacia atrás: Alejar (Zoom Out)
+    -- Scroll backward: Zoom Out
     elseif control == CONTROL_SCROLLBACK then
-        self.zoom_level = math.max(0.5, self.zoom_level - 0.15) -- Límite de x0.5
+        self.zoom_level = math.max(0.5, self.zoom_level - 0.15) -- Limit of x0.5
         self.map_root:SetScale(self.zoom_level)
         return true
     end

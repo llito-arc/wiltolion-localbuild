@@ -272,7 +272,7 @@ local function UpdateThermalAndLight(inst)
         return
     end
 
-    -- BLOCK B: ACTUALIZAR EL NÚCLEO (HEAT POWER)
+    -- BLOCK B: UPDATE THE CORE (HEAT POWER)
     local hunger_pct = inst.components.hunger:GetPercent()
     
     -- Salvavidas inicial
@@ -348,7 +348,7 @@ local function UpdateThermalAndLight(inst)
     -- Enviamos el valor exacto al HUD
     inst._net_heat_power:set(math.floor(inst._heat_power))
 
-    local core_pct = inst._heat_power / 100 -- Valor de 0.0 a 1.0 para los cálculos del Bloque C
+    local core_pct = inst._heat_power / 100 -- Value from 0.0 to 1.0 for Block C calculations
 
     -- BLOCK C: CALCULATE CORE-BASED THERMALS & LIGHT RADIUS
     local temp_modifier, heater_emit, insulation = 0, 0, 0

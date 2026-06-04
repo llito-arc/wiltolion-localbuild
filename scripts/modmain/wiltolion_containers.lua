@@ -51,7 +51,7 @@ AddClassPostConstruct("components/container_replica", function(self)
 end)
 
 -- ==========================================
--- SISTEMA DE RANURAS: PILÓN GIRASOL
+-- SLOT SYSTEM: SUNFLOWER PYLON
 -- ==========================================
 local containers = GLOBAL.require("containers")
 local Image = GLOBAL.require("widgets/image")

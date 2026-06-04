@@ -58,7 +58,7 @@ local states =
             StopBuzz(inst)
             inst.Physics:Stop()
             RemovePhysicsColliders(inst)
-            -- Borramos DropDeathLoot() y las animaciones para que tu explosión de fuego brille
+            -- Removed DropDeathLoot() and animations so your fire explosion shines
         end,
 
         events =
@@ -137,9 +137,9 @@ local states =
         onenter = function(inst, start_anim)
             inst.Physics:Stop()
             
-            -- Si tiene objetivo es que está enfadada
+            -- If it has a target it means it's angry
             local is_angry = (inst.components.combat ~= nil and inst.components.combat:HasTarget() or inst:HasTag("killer"))
-            local animname = is_angry and "idle_angry" or "walk_loop" -- OJO AQUÍ: Usamos walk_loop para el vuelo estacionario
+            local animname = is_angry and "idle_angry" or "walk_loop" -- NOTE HERE: We use walk_loop for stationary flight
             
             if start_anim then
                 inst.AnimState:PlayAnimation(start_anim)

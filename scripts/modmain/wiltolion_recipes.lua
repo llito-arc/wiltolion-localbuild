@@ -155,14 +155,14 @@ AddRecipe2(
 )
 
 -- ==========================================
--- RECETA DE LA INVOCACIÓN CURATIVA
+-- HEALING INVOCATION RECIPE
 -- ==========================================
 AddRecipe2("wiltolion_thingy",
     {
-        GLOBAL.Ingredient("silk", 3),
-        Ingredient("goldnugget", 2),
-        Ingredient("wiltolion_sundrop", 10),
-        Ingredient("spidergland", 1)
+        GLOBAL.Ingredient("silk", 5),
+        Ingredient("goldnugget", 5),
+        Ingredient("wiltolion_sundrop", 30),
+        Ingredient("spidergland", 3)
     },
     GLOBAL.TECH.NONE, 
     {

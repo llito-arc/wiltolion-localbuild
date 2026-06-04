@@ -417,7 +417,7 @@ local function fn()
 
     inst:AddTag("structure")
     inst:AddTag("wiltolion_pylon")
-
+    inst:AddTag("ignorescangoincontainer")
     inst.entity:SetPristine()
 
     if not TheWorld.ismastersim then

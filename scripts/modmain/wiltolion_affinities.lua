@@ -34,6 +34,14 @@ local LUNAR_GEAR = {
     ["opalstaff"] = true,
 }
 
+local SHADOW_ATTACKER_TAGS = {
+    "shadow",             -- Terrorbeaks, Crawling Horrors
+    "shadowcreature",     -- General shadow tag
+    "shadowchesspiece",   -- Shadow Knights, Bishops, Rooks
+    "nightmarecreature",  -- Nightmare pigs/hounds
+    "stalker",            -- Ancient Fuelweaver
+}
+
 -- ===========================================================================
 -- SERVER LOGIC FUNCTIONS
 -- ===========================================================================
@@ -236,6 +244,36 @@ end
 -- ===========================================================================
 -- INJECTION REGISTRY
 -- ===========================================================================
+local function OnAttacked(inst, data)
+    -- Ensure valid data, attacker, and that the player actually took damage
+    if data == nil or data.attacker == nil or data.damage == nil or data.damage <= 0 then
+        return
+    end
+
+    -- Check if the player is already dead to prevent post-mortem sanity drops
+    if inst:HasTag("playerghost") or (inst.components.health and inst.components.health:IsDead()) then
+        return
+    end
+
+    -- Verify if the attacker is a shadow-aligned entity
+    local is_shadow_attacker = false
+    for _, tag in ipairs(SHADOW_ATTACKER_TAGS) do
+        if data.attacker:HasTag(tag) then
+            is_shadow_attacker = true
+            break
+        end
+    end
+
+    if is_shadow_attacker and inst.components.sanity ~= nil then
+        -- Calculate sanity penalty based on physical damage received
+        -- Multiplier defines how much sanity is lost per 1 HP lost (e.g., 0.5 = half damage)
+        local sanity_damage_multiplier = 0.5 
+        local sanity_penalty = -(data.damage * sanity_damage_multiplier)
+        
+        -- Apply the sanity loss
+        inst.components.sanity:DoDelta(sanity_penalty)
+    end
+end
 
 AddPlayerPostInit(function(inst)
     if not GLOBAL.TheWorld.ismastersim then return end
@@ -246,9 +284,11 @@ AddPlayerPostInit(function(inst)
         end
 
         inst:ListenForEvent("finishedwork", OnFinishedWork)
+        
+        -- Native hook for taking damage
+        inst:ListenForEvent("attacked", OnAttacked)
 
         if inst.components.sanity then
-            -- Updated to use the new dual-affinity function
             inst.components.sanity.custom_rate_fn = WiltolionSanityAffinities
         end
     end

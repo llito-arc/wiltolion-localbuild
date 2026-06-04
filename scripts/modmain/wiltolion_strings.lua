@@ -219,7 +219,6 @@ for char, line in pairs(thingy_descriptions) do
     end
 end
 
--- Inyectar de forma segura los diálogos
 for char, line in pairs(journal_descriptions) do
     if STRINGS.CHARACTERS[char] then
         if not STRINGS.CHARACTERS[char].DESCRIBE then STRINGS.CHARACTERS[char].DESCRIBE = {} end

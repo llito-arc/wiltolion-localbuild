@@ -1,13 +1,13 @@
 local assets =
 {
-    Asset("ANIM", "anim/book_maxwell.zip"),  -- El esqueleto original (que funciona perfecto)
-    Asset("ANIM", "anim/wilto_journal.zip"), -- Carga la animación del suelo
+    Asset("ANIM", "anim/book_maxwell.zip"),  -- The original skeleton (works perfectly)
+    Asset("ANIM", "anim/wilto_journal.zip"), -- Loads the ground animation
 }
 
 local IDLE_SOUND_VOLUME = 0.5
 
 --------------------------------------------------------------------------
--- SISTEMA DE SONIDOS Y ANIMACIONES FLOTANTES (Mantenido intacto)
+-- FLOATING SOUNDS AND ANIMATIONS SYSTEM (Kept intact)
 --------------------------------------------------------------------------
 local function tryplaysound(inst, id, sound)
     inst._soundtasks[id] = nil
@@ -29,17 +29,17 @@ local function queuekillsound(inst, delay, id, sound)
     inst._soundtasks[id] = inst:DoTaskInTime(delay, trykillsound, id, sound)
 end
 
--- Modificamos los sonidos de cierre y caída
--- Modificamos los sonidos de cierre y caída
+-- Modify close and drop sounds
+-- Modify close and drop sounds
 local function tryqueueclosingsounds(inst, onanimover)
     inst._soundtasks.animover = nil
     if inst.AnimState:IsCurrentAnimation("proximity_pst") then
         inst:RemoveEventCallback("animover", onanimover)
         
-        -- Sonido de pasar página suave
+        -- Soft page turn sound
         queueplaysound(inst, 4 * FRAMES, "close", "dontstarve/characters/actions/page_turn")
         queuekillsound(inst, 5 * FRAMES, "killidle", "idlesound")
-        -- Sonido cristalino/mágico al caer al suelo
+        -- Crystal/magic sound when hitting ground
         queueplaysound(inst, 14 * FRAMES, "drop", "dontstarve/common/gem_drop")
     end
 end
@@ -63,8 +63,8 @@ local function startclosingsounds(inst)
     onanimover(inst)
 end
 
--- Modificamos el zumbido de "Idle" (Cuando está flotando)
--- Modificamos el zumbido de "Idle" (Cuando está flotando)
+-- Modify "Idle" buzz (When floating)
+-- Modify "Idle" buzz (When floating)
 local function onturnon(inst)
     if inst.isfloating then return end
     inst.isfloating = true
@@ -82,7 +82,7 @@ local function onturnon(inst)
     end
     
     if not inst.SoundEmitter:PlayingSound("idlesound") then
-        -- Zumbido lunar calmado del Orbe Celestial
+        -- Calm lunar buzz of the Celestial Orb
         inst.SoundEmitter:PlaySound("dontstarve/common/together/celestial_orb/active_LP", "idlesound")
         inst.SoundEmitter:SetVolume("idlesound", IDLE_SOUND_VOLUME)
     end
@@ -166,14 +166,14 @@ local function topocket(inst) OnEntitySleep(inst) end
 local function toground(inst) OnEntityWake(inst) end
 
 --------------------------------------------------------------------------
--- LÓGICA DEL LIBRO (AL LEERLO)
+-- BOOK LOGIC (WHEN READING IT)
 --------------------------------------------------------------------------
 local function OnReadJournal(inst, reader)
     if reader.components.health:IsDead() or reader:HasTag("playerghost") then
         return false
     end
 
-    -- 1. Añadimos p_harvest aquí
+    -- 1. Add p_harvest here
     local p_up, p_chop, p_mine, p_dig, p_fight, p_give, p_harvest = true, true, true, true, true, true, true
     local tokens, points = 0, 0 
 
@@ -189,7 +189,7 @@ local function OnReadJournal(inst, reader)
                         p_dig = pet.wilto_toggles.dig ~= false
                         p_fight = pet.wilto_toggles.fight ~= false
                         p_give = pet.wilto_toggles.give ~= false
-                        p_harvest = pet.wilto_toggles.harvest ~= false -- 2. Leemos la memoria
+                        p_harvest = pet.wilto_toggles.harvest ~= false -- 2. Read the memory
                     end
                     tokens = pet.wilto_heal_tokens or 0
                     points = math.floor(pet.wilto_heal_points or 0)
@@ -199,7 +199,7 @@ local function OnReadJournal(inst, reader)
         end
     end
 
-    -- 3. Añadimos el séptimo número a la cadena
+    -- 3. Add the seventh number to the string
     local state_str = (p_up and "1" or "0") .. (p_chop and "1" or "0") .. (p_mine and "1" or "0") .. (p_dig and "1" or "0") .. (p_fight and "1" or "0") .. (p_give and "1" or "0") .. (p_harvest and "1" or "0")
     state_str = state_str .. "_" .. tostring(tokens) .. "_" .. tostring(points)
 
@@ -211,7 +211,7 @@ local function OnReadJournal(inst, reader)
 end
 
 --------------------------------------------------------------------------
--- CONSTRUCTOR DEL PREFAB
+-- PREFAB CONSTRUCTOR
 --------------------------------------------------------------------------
 local function fn()
     local inst = CreateEntity()
@@ -245,7 +245,7 @@ local function fn()
     inst.components.inventoryitem.imagename = "wilto_journal"
     inst.components.inventoryitem.atlasname = "images/inventoryimages/wilto_journal.xml"
 
-    -- Añadimos el componente base de todos los libros
+    -- Add the base component for all books
     inst:AddComponent("book")
     inst.components.book.onread = OnReadJournal
 
@@ -254,13 +254,13 @@ local function fn()
 
     inst:AddComponent("luckitem")
     inst.components.luckitem:SetLuck(function(inst, owner)
-        -- Puedes cambiar este número. 
-        -- TUNING.HORSESHOE_LUCK base suele ser un valor pequeño.
-        -- Ponle 1, 2 o 5 dependiendo de qué tan roto quieras el RNG.
+        -- You can change this number.
+        -- TUNING.HORSESHOE_LUCK base is usually a small value.
+        -- Set it to 1, 2 or 5 depending on how broken you want the RNG.
         return 2
     end)
     -- ==========================================
-    -- Añadimos el componente base de todos los libros
+    -- Add the base component for all books
 
     inst:AddComponent("hauntable")
     inst.components.hauntable.cooldown = TUNING.HAUNT_COOLDOWN_SMALL

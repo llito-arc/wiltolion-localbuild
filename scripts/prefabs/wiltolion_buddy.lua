@@ -1,9 +1,9 @@
 local assets = {
-    -- Mientras haces tus propios gráficos, usaremos los de la abeja base
+    -- While you make your own graphics, we'll use the base bee ones
     Asset("ANIM", "anim/wiltolion_buddy.zip"),
 }
 
--- El StateGraph de la abeja (SGbee) exige que existan estas rutas de sonido o crasheará
+-- The bee StateGraph (SGbee) requires these sound paths to exist or it will crash
 local buddysounds = {
     takeoff = "dontstarve/bee/bee_takeoff",
     attack = "dontstarve/bee/bee_attack",
@@ -12,7 +12,7 @@ local buddysounds = {
     death = "dontstarve/bee/bee_death",
 }
 
--- Función obligatoria para que el SGbee pueda encender/apagar el zumbido
+-- Mandatory function for SGbee to turn buzz on/off
 local function EnableBuzz(inst, enable)
     if enable then
         if not inst.buzzing then
@@ -26,7 +26,7 @@ local function EnableBuzz(inst, enable)
         inst.SoundEmitter:KillSound("buzz")
     end
 end
--- Lista de enemigos a los que la mosca atacará sin que se lo ordenes
+-- List of enemies the fly will attack without being ordered to
 local ANNOYING_ENEMIES = {
     perd = true,                  -- Pavos roba-bayas (Gobblers)
     buzzard = true,               -- Buitres
@@ -36,11 +36,11 @@ local ANNOYING_ENEMIES = {
     stalker_minion1 = true,       
     stalker_minion2 = true,       
     
-    mossling = true,              -- Crías del Moose/Goose
-    bat = true,                   -- Murciélagos (Batilisks)
+    mossling = true,              -- Baby Moose/Goose
+    bat = true,                   -- Bats (Batilisks)
     slurper = true,               -- Roba-cordura de las ruinas
 
-    bird_mutant = true,           -- Pájaros mutantes de las ruinas
+    bird_mutant = true,           -- Mutant birds from the ruins
     bird_mutant_spitter = true,   -- Escupidores mutantes de las ruinas
 }
 
@@ -90,25 +90,25 @@ local function OnUpdate(inst, dt)
 
     local leader = inst.components.follower and inst.components.follower:GetLeader()
     
-    -- Si hay líder, el cerebro funciona y no estamos parados
+    -- If there's a leader, the brain works and we're not standing still
     if leader and leader:IsValid() and inst.brain and not inst.brain.stopped then
         
-        -- [NUEVO] ¿La mosca tiene a alguien en la mira?
+        -- [NEW] Does the fly have someone in their sights?
         local has_target = inst.components.combat and inst.components.combat:HasTarget()
         
-        -- Si la mosca está golpeando, ocupada, o PERSIGUIENDO un objetivo, devolvemos el control a la IA
+        -- If the fly is hitting, busy, or CHASING a target, return control to AI
         if inst.sg:HasStateTag("attack") or inst.sg:HasStateTag("busy") or has_target then
             inst.components.locomotor.directdrive = false
             
-            -- [NUEVO] ¡Devolverles su velocidad normal para que persigan rápido!
+            -- [NEW] Give them their normal speed so they chase quickly!
             inst.components.locomotor.walkspeed = 7
             
             return
         end
-        -- Si no hay enemigos, tomamos el control para la órbita bonita
+        -- If there are no enemies, we take control for the nice orbit
         inst.components.locomotor.directdrive = true
 
-        -- Averiguar cuántas moscas hay y cuál es el índice de ESTA mosca para separarlas
+        -- Figure out how many flies there are and what is THIS fly's index to separate them
         local index = 0
         local maxpets = 1
         if leader.components.petleash then
@@ -126,7 +126,7 @@ local function OnUpdate(inst, dt)
 
         if maxpets == 0 then maxpets = 1 end
 
-        -- Matemática de órbita (suave, cuadro por cuadro)
+        -- Orbit math (smooth, frame by frame)
         local theta = (index / maxpets) * TWOPI + GetTime() * FORMATION_ROTATION_SPEED
         local lx, ly, lz = leader.Transform:GetWorldPosition()
 
@@ -136,11 +136,11 @@ local function OnUpdate(inst, dt)
         local dx, dz = px - lx, pz - lz
         local dist = math.sqrt(dx*dx + dz*dz)
 
-        -- Ajusta su velocidad según qué tan lejos esté de su punto ideal
+        -- Adjust speed based on how far it is from its ideal point
         inst.components.locomotor.walkspeed = math.min(dist * 8, FORMATION_MAX_SPEED)
         inst:FacePoint(lx, 0, lz)
         
-        -- Empuja la entidad físicamente hacia adelante
+        -- Push the entity physically forward
         if inst.updatecomponents[inst.components.locomotor] == nil then
             inst.components.locomotor:WalkForward(true)
         end
@@ -168,7 +168,7 @@ local function fn()
     -- Le dice al juego que voltee a la mosquita al moverse
     inst.Transform:SetFourFaced()
 
-    -- 1. FÍSICA DE VUELO (Ignora el agua y los bordes)
+    -- 1. FLIGHT PHYSICS (Ignores water and edges)
     MakeFlyingCharacterPhysics(inst, 1, 0.5)
 
     -- 2. TAGS DE VUELO
@@ -203,7 +203,7 @@ local function fn()
     inst.components.locomotor.walkspeed = 7
     inst.components.locomotor.runspeed = 12
     inst.components.locomotor:EnableGroundSpeedMultiplier(false) -- Vuela a la misma velocidad sobre caminos o barro
-    inst.components.locomotor:SetTriggersCreep(false) -- No activa telarañas
+    inst.components.locomotor:SetTriggersCreep(false) -- Doesn't trigger webs
 
     -- 4. EL STATEGRAPH DE LA ABEJA
     inst:SetStateGraph("SGwiltolionbuddy")
@@ -239,7 +239,7 @@ local function fn()
     inst.components.combat:SetRetargetFunction(1, function(inst)
         local leader = inst.components.follower.leader
         
-        -- Prioridad 1: Si el líder tiene un objetivo Y ES VULNERABLE, lo atacamos
+        -- Priority 1: If the leader has a target AND IS VULNERABLE, attack it
         if leader ~= nil and leader.components.combat.target ~= nil then
             local leader_target = leader.components.combat.target
             if IsTargetVulnerable(leader_target) then
@@ -247,12 +247,12 @@ local function fn()
             end
         end
 
-        -- Prioridad 2: Si el líder no pelea (o su objetivo tiene escudo), escaneamos enemigos molestos
+        -- Priority 2: If the leader isn't fighting (or target has shield), scan annoying enemies
         return FindEntity(inst, 12, function(guy)
             return guy.components.health and not guy.components.health:IsDead()
                and guy.components.combat and guy.components.combat:CanBeAttacked(inst)
-               and ANNOYING_ENEMIES[guy.prefab] -- ¿Está en nuestra lista negra?
-               and IsTargetVulnerable(guy) -- Aseguramos que las curaciones no sean inmortales por algún bug
+               and ANNOYING_ENEMIES[guy.prefab] -- Is it on our blacklist?
+               and IsTargetVulnerable(guy) -- Ensure the heals aren't immortal from some bug
         end,
         { "_combat", "_health" }, 
         { "INCOVER", "notarget", "invisible", "playerghost", "player" }
@@ -266,8 +266,8 @@ local function fn()
 
         local leader = inst.components.follower.leader
         
-        -- BARRERA 2: Si el líder ataca a algo nuevo, Buddy cambia de objetivo para ayudar.
-        -- EXCEPCIÓN: Si el líder ataca a un jefe con escudo, Buddy ignora al líder y sigue atacando a su objetivo actual (ej: una mano).
+        -- BARRIER 2: If the leader attacks something new, Buddy changes targets to help.
+        -- EXCEPTION: If the leader attacks a shielded boss, Buddy ignores the leader and keeps attacking their current target (e.g., a hand).
         if leader and leader.components.combat.target and leader.components.combat.target ~= target then
             if IsTargetVulnerable(leader.components.combat.target) then
                 return false
@@ -290,17 +290,17 @@ local function fn()
         inst:Remove()
     end)
 
-    -- Invocación usando el sistema Petleash de Klei (Con reciclaje y efecto de fuego)
+    -- Summoning using Klei's Petleash system (With recycling and fire effect)
     inst:ListenForEvent("onbuilt", function(inst, data)
         local builder = data and data.builder
         if builder and builder.components.petleash then
             local pets = builder.components.petleash:GetPets()
             
             local lowest_health_buddy = nil
-            local min_health_pct = 999 -- Un número alto inicial para comparar
+            local min_health_pct = 999 -- A high initial number to compare
             local buddy_count = 0
             
-            -- 1. Revisamos cuántas moscas hay y buscamos la que tenga MENOS VIDA
+            -- 1. Check how many flies there are and find the one with LEAST HP
             for pet_inst, _ in pairs(pets) do
                 if pet_inst:HasTag("wiltolion_buddy") then
                     buddy_count = buddy_count + 1
@@ -309,7 +309,7 @@ local function fn()
                     if pet_inst.components.health then
                         local current_health_pct = pet_inst.components.health:GetPercent()
                         
-                        -- Si es la primera que revisamos, o si tiene menos vida que la anterior más débil...
+                        -- If it's the first we're reviewing, or if it has less HP than the previous weakest...
                         if lowest_health_buddy == nil or current_health_pct < min_health_pct then
                             lowest_health_buddy = pet_inst
                             min_health_pct = current_health_pct
@@ -318,9 +318,9 @@ local function fn()
                 end
             end
             
-            -- 2. Si ya hay 5, forzamos la desaparición de la más herida
+            -- 2. If there are already 5, force the most injured to disappear
             if buddy_count >= 5 and lowest_health_buddy ~= nil then
-                -- Efecto visual y sonoro para la mosca que desaparece
+                -- Visual and audio effect for the fly that disappears
                 local ox, oy, oz = lowest_health_buddy.Transform:GetWorldPosition()
                 SpawnPrefab("halloween_firepuff_1").Transform:SetPosition(ox, oy, oz)
                 lowest_health_buddy.SoundEmitter:PlaySound("dontstarve/common/fireOut")
@@ -328,17 +328,17 @@ local function fn()
                 builder.components.petleash:DespawnPet(lowest_health_buddy)
             end
 
-            -- 3. Invocamos la mosca nueva
+            -- 3. Summon the new fly
             local x, y, z = inst.Transform:GetWorldPosition()
             local real_buddy = builder.components.petleash:SpawnPetAt(x, y, z, "wiltolion_buddy")
             
             if real_buddy then
-                -- 4. Efecto de llamarada de la mosca nueva
+                -- 4. Flare effect for the new fly
                 SpawnPrefab("halloween_firepuff_1").Transform:SetPosition(x, y, z)
             end
             
-            -- Eliminamos la "mosca falsa" del menú
-            -- Eliminamos la "mosca falsa" del menú de forma segura
+            -- Remove the "fake fly" from the menu
+            -- Remove the "fake fly" from the menu safely
             inst:Hide() -- La ocultamos primero para evitar parpadeos
             inst:DoTaskInTime(0, inst.Remove) -- La eliminamos en el siguiente frame
         end
