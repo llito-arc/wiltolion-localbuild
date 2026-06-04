@@ -1,12 +1,12 @@
 local _G = GLOBAL
 
 -- =========================================================
--- 1. PREFABS (Evita crasheos en ropero y compendio)
+-- 1. PREFABS (Avoids crashes in wardrobe and compendium)
 -- =========================================================
 PrefabFiles = {
     "wiltolion",
     "wiltolion_none",
-    "wiltolion_torus", -- Necesario para que el compendio reconozca el ítem
+    "wiltolion_torus", 
     "wilto_journal",
 }
 
@@ -14,7 +14,7 @@ PrefabFiles = {
 -- 2. ASSETS LIST
 -- =========================================================
 Assets = {
-    -- Retratos del Ropero y Menú
+    -- Wardrobe and Menu Portraits
     Asset( "IMAGE", "images/selectscreen_portraits/wiltolion.tex" ),
     Asset( "ATLAS", "images/selectscreen_portraits/wiltolion.xml" ),
     Asset( "IMAGE", "images/selectscreen_portraits/wiltolion_silho.tex" ),
@@ -30,19 +30,20 @@ Assets = {
     Asset( "IMAGE", "images/names_gold_wiltolion.tex" ),
     Asset( "ATLAS", "images/names_gold_wiltolion.xml" ),
     
-    -- ¡NUEVO! Icono para la lista de mundos / saveslot
     Asset( "IMAGE", "images/saveslot_portraits/wiltolion.tex" ),
     Asset( "ATLAS", "images/saveslot_portraits/wiltolion.xml" ),
 
-    -- ¡NUEVO! Imágenes para que el Torus cargue en el menú
     Asset("IMAGE", "images/inventoryimages/wiltolion_torus.tex"),
     Asset("ATLAS", "images/inventoryimages/wiltolion_torus.xml"),
+
+    Asset("IMAGE", "images/inventoryimages/wilto_journal.tex"),
+    Asset("ATLAS", "images/inventoryimages/wilto_journal.xml"),
 }
 
 local STRINGS = _G.STRINGS
 
 -- =========================================================
--- 3. STRINGS (Textos e info del menú/compendio)
+-- 3. STRINGS
 -- =========================================================
 STRINGS.CHARACTER_TITLES.wiltolion = "The Sun Lion"
 STRINGS.CHARACTER_NAMES.wiltolion = "Wiltolion"
@@ -50,21 +51,21 @@ STRINGS.CHARACTER_DESCRIPTIONS.wiltolion = "*Made of sun\n*And lions\n*well, not
 STRINGS.CHARACTER_QUOTES.wiltolion = "\"I will take care of you\""
 STRINGS.CHARACTER_SURVIVABILITY.wiltolion = "Slim"
 
--- Nombres internos
+-- Internal names
 STRINGS.NAMES.WILTOLION = "Wiltolion"
 STRINGS.SKIN_NAMES.wiltolion_none = "Wiltolion"
 
--- ¡NUEVO! Habilidades listadas en el compendio
+-- Skills listed in the compendium
 STRINGS.CHARACTER_DETAILS.wiltolion = "- Emits light and heat when well fed\n- Passively cooks food in his inventory\n- Restores sanity and durability using magic"
 
--- ¡NUEVO! Biografía del compendio
+-- Compendium biography
 STRINGS.CHARACTER_ABOUTME.wiltolion = "A radiant anomaly bound to a feline form, Wiltolion wanders the Constant bringing the warmth of a star wherever he steps."
 
--- Necesitamos el nombre del ítem en el cliente para la interfaz
+-- We need the item name on the client for the interface
 STRINGS.NAMES.WILTOLION_TORUS = "Sun Torus"
 
 -- =========================================================
--- INFO DETALLADA DEL COMPENDIO (Cumpleaños, Comida, Lore)
+-- DETAILED COMPENDIUM INFO (Birthday, Food, Lore)
 -- =========================================================
 if not _G.STRINGS.CHARACTER_BIOS then
     _G.STRINGS.CHARACTER_BIOS = {}
@@ -77,7 +78,7 @@ _G.STRINGS.CHARACTER_BIOS.wiltolion = {
     },
     { 
         title = "Favorite Food", 
-        desc = "Wiltolion likes any yummy things, but bananajuices makes his mane shine extra bright!" -- O la comida que elijas
+        desc = "Wiltolion likes any yummy things, but bananajuices makes his mane shine extra bright!" -- Or the food you choose
     },
     { 
         title = "Cosmos", 
@@ -86,12 +87,12 @@ _G.STRINGS.CHARACTER_BIOS.wiltolion = {
 }
 
 -- =========================================================
--- 4. CONFIGURACIÓN DEL COMPENDIO (Ítems Iniciales)
+-- 4. COMPENDIUM CONFIGURATION (Starting Items)
 -- =========================================================
--- Registrar el atlas para la interfaz
+-- Register the atlas for the interface
 RegisterInventoryItemAtlas("images/inventoryimages/wiltolion_torus.xml", "wiltolion_torus.tex")
 
--- Decirle al menú con qué empieza el personaje
+-- Tell the menu what the character starts with
 if _G.TUNING.GAMEMODE_STARTING_ITEMS.DEFAULT == nil then
     _G.TUNING.GAMEMODE_STARTING_ITEMS.DEFAULT = {}
 end
@@ -100,7 +101,7 @@ _G.TUNING.GAMEMODE_STARTING_ITEMS.DEFAULT.WILTOLION = {
     "wilto_journal",
 }
 
--- Decirle al menú dónde encontrar la imagen de tu ítem customizado
+-- Tell the menu where to find your custom item image
 if _G.TUNING.STARTING_ITEM_IMAGE_OVERRIDE == nil then
     _G.TUNING.STARTING_ITEM_IMAGE_OVERRIDE = {}
 end
@@ -114,7 +115,7 @@ _G.TUNING.STARTING_ITEM_IMAGE_OVERRIDE.wilto_journal = {
 }
 
 -- =========================================================
--- 5. SKINS Y REGISTRO
+-- 5. SKINS AND REGISTRATION
 -- =========================================================
 local skin_modes = {
     { 

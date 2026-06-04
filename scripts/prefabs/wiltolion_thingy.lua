@@ -189,7 +189,7 @@ local function fn()
 
     inst.entity:AddLight()
 
-    inst.Light:SetRadius(1.5)      
+    inst.Light:SetRadius(0.5)      
     inst.Light:SetFalloff(1)     
     inst.Light:SetIntensity(0.4)   
 
