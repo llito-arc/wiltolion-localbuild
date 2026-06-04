@@ -247,8 +247,8 @@ local function fn()
     end)
 
     inst:AddComponent("locomotor")
-    inst.components.locomotor.walkspeed = 7
-    inst.components.locomotor.runspeed = 10
+    inst.components.locomotor.walkspeed = 4
+    inst.components.locomotor.runspeed = 8
     inst.components.locomotor:SetAllowPlatformHopping(true)
 
     inst:SetStateGraph("SGwiltolionthingy")

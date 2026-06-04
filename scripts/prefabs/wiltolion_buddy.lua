@@ -157,7 +157,7 @@ local function fn()
 
     inst.entity:AddLight()
 
-    inst.Light:SetRadius(0.2)      
+    inst.Light:SetRadius(0.3)      
     inst.Light:SetFalloff(1)     
     inst.Light:SetIntensity(0.3)   
 
@@ -220,17 +220,6 @@ local function fn()
 
     inst:AddComponent("health")
     inst.components.health:SetMaxHealth(150)
-
-
-    inst.entity:AddLight()
-
-    inst.Light:SetRadius(1)      
-    inst.Light:SetFalloff(0.7)     
-    inst.Light:SetIntensity(0.6)   
-
-    inst.Light:SetColour(255/255, 230/255, 150/255) 
-
-    inst.Light:Enable(true)
 
     inst:AddComponent("combat")
     inst.components.combat:SetDefaultDamage(10)
