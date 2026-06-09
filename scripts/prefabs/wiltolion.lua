@@ -183,6 +183,76 @@ local function DropSolarEnergy(inst)
     end
 end
 
+-- [[ 3.4: Shadow Affinity (Insanity Weakness) ]]
+local function UpdateShadowAffinity(inst)
+    if not inst:IsValid() or inst:HasTag("playerghost") then return end
+
+    local sanity_pct = inst.components.sanity ~= nil and inst.components.sanity:GetPercent() or 1
+    local x, y, z = inst.Transform:GetWorldPosition()
+
+    -- =======================================================
+    -- MECHANIC 1: SLIGHT AGGRO INCREASE
+    -- 30% chance every 5 seconds to steal aggro from ONE nearby shadow
+    -- =======================================================
+    if math.random() < 0.30 then
+        local nearby_shadows = TheSim:FindEntities(x, y, z, 15, {"shadowcreature"}, {"INLIMBO"})
+        for _, shadow in ipairs(nearby_shadows) do
+            -- If it's a valid shadow and it's NOT already targeting Wiltolion
+            if shadow.components.combat ~= nil and shadow.components.combat.target ~= inst then
+                shadow.components.combat:SetTarget(inst)
+                break -- Only steal ONE shadow per tick to keep it balanced
+            end
+        end
+    end
+
+    -- =======================================================
+    -- MECHANIC 2: INCREASED SPAWN RATE DURING INSANITY
+    -- Only active if sanity is critically low (<= 15%)
+    -- =======================================================
+    if sanity_pct <= 0.15 then
+        
+        -- Count how many shadows are currently targeting the player
+        local active_chasers = 0
+        local all_shadows = TheSim:FindEntities(x, y, z, 30, {"shadowcreature"}, {"INLIMBO"})
+        
+        for _, shadow in ipairs(all_shadows) do
+            if shadow.components.combat ~= nil and shadow.components.combat.target == inst then
+                active_chasers = active_chasers + 1
+            end
+        end
+
+        -- Limit to max 3 shadows at the same time to prevent unfair swarms.
+        -- 15% chance every 5 seconds translates to roughly 1 extra shadow every ~33 seconds.
+        -- This effectively increases the native spawn rate by roughly 50%.
+        if active_chasers < 3 and math.random() < 0.15 then
+            
+            -- 60% chance for Crawling Horror, 40% for Terrorbeak
+            local prefab = math.random() < 0.60 and "crawlinghorror" or "terrorbeak"
+            local shadow = SpawnPrefab(prefab)
+            
+            if shadow ~= nil then
+                -- Spawn it slightly off-screen 
+                local offset = FindWalkableOffset(inst:GetPosition(), math.random() * 2 * math.pi, 15, 12, true, false)
+                if offset ~= nil then
+                    shadow.Transform:SetPosition(x + offset.x, y, z + offset.z)
+                else
+                    shadow.Transform:SetPosition(x, y, z)
+                end
+                
+                -- Set target so the native shadow brain handles the rest 
+                -- (including despawning it naturally if sanity rises above 15%)
+                if shadow.components.combat ~= nil then
+                    shadow.components.combat:SetTarget(inst)
+                end
+                
+                -- Play native spawn sound
+                if shadow.SoundEmitter ~= nil then
+                    shadow.SoundEmitter:PlaySound("dontstarve/sanity/shadow_spawn")
+                end
+            end
+        end
+    end
+end
 
 -- ===========================================================================
 --                         SECTION 4: THERMAL & LIGHT LOGIC
@@ -479,6 +549,7 @@ local function StartSolarSystems(inst)
     if inst._light_task == nil then inst._light_task = inst:DoPeriodicTask(0.05, SmoothLight) end
     if inst._cook_task == nil then inst._cook_task = inst:DoPeriodicTask(10, PassiveCook) end
     if inst._sundrop_task == nil then inst._sundrop_task = inst:DoPeriodicTask(5, DropSolarEnergy) end
+    if inst._shadow_affinity_task == nil then inst._shadow_affinity_task = inst:DoPeriodicTask(5, UpdateShadowAffinity) end
     UpdateThermalAndLight(inst) -- Force an immediate update
 end
 
@@ -487,6 +558,7 @@ local function StopSolarSystems(inst)
     if inst._sparks_task then inst._sparks_task:Cancel(); inst._sparks_task = nil end
     if inst._cook_task then inst._cook_task:Cancel(); inst._cook_task = nil end
     if inst._sundrop_task then inst._sundrop_task:Cancel(); inst._sundrop_task = nil end
+    if inst._shadow_affinity_task then inst._shadow_affinity_task:Cancel(); inst._shadow_affinity_task = nil end
     UpdateThermalAndLight(inst) -- Force update to apply ghost visuals
 end
 

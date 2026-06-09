@@ -248,13 +248,13 @@ local function fn()
 
     inst:AddComponent("locomotor")
     inst.components.locomotor.walkspeed = 4
-    inst.components.locomotor.runspeed = 8
+    inst.components.locomotor.runspeed = 6
     inst.components.locomotor:SetAllowPlatformHopping(true)
 
     inst:SetStateGraph("SGwiltolionthingy")
     
     inst:AddComponent("health")
-    inst.components.health:SetMaxHealth(TUNING.SPIDER_HEALER_HEALTH or 400)
+    inst.components.health:SetMaxHealth(200)
 
     inst:AddComponent("combat")
     inst.components.combat.hiteffectsymbol = "body"

@@ -6068,8 +6068,58 @@ return {
         },
 
         YOTH_KNIGHTSTICK = "A bouncy stick-pony! Giddy up, zoom-zoom!",
-        YOTH_CHAIR_ROCKING_ITEM = "Toys to build a wobbly-chair!", -- The chair itself uses WOOD_CHAIR inspect states.
-    }, 
+        YOTH_CHAIR_ROCKING_ITEM = "Toys to build a wobbly-chair!",
+        
+        -- Meta 6
+
+        WX78_DRONE_SCOUT = "Fly far, robot friend!", 
+        WX78_DRONE_DELIVERY = "someday it'll bring my goodies!",
+        WX78_DRONE_ZAP = "zap zap zap! that's the sound cranky robots make!",
+        WX78_DRONE_ZAP_REMOTE =
+        {
+            GENERIC = "it's like a video game, but for realsies!",
+            CANUSE = "only_used_by_wx78",
+        },
+
+        -- All other characters but Wx-78 share one quote.
+        WX78MODULE_RADAR = "robot magic in a teeny-tiny package!",
+        WX78MODULE_STACKSIZE = "robot magic in a teeny-tiny package!",
+        WX78MODULE_DIGESTION = "robot magic in a teeny-tiny package!",
+        WX78MODULE_SCREECH = "robot magic in a teeny-tiny package!",
+        WX78MODULE_LIGHT2 = "robot magic in a teeny-tiny package!",
+        WX78MODULE_SHIELDING = "robot magic in a teeny-tiny package!",
+        WX78MODULE_SPIN = "robot magic in a teeny-tiny package!",
+        WX78MODULE_CHESS = "robot magic in a teeny-tiny package!",
+
+        WX78_INVENTORYCONTAINER =
+        {
+            HELD = "only_used_by_wx78", -- Held, and working as a container
+            NOPOWER = "only_used_by_wx78", -- Held but can't open due to wx charge level too low
+            GENERIC = "super deep pockets for our robo-friend!", -- It was dropped, treat it as if its broken down, and is rummagable
+        },
+
+        WX78_FOODBRICK =
+        {
+            WET = "it's not very yummy, but it's still food!",
+            GENERIC = "I think it needs a little something else before we eat it!",
+        },
+
+        WX78_BACKUPBODY =
+        {
+            GENERIC = "I wonder if I could make a teeny little army!", -- We are examining a claimed body belonging to a WX. We can use their display name if we want to.
+            UNCLAIMED = "only_used_by_wx78", -- We are examining an unclaimed body.
+            VIEWERS_BODY = "only_used_by_wx78", -- We (WX) are examining our own body.
+        },
+
+        WX78_POSSESSEDBODY = "It sure can! Its little army is here!",
+
+        WX78_GESTALTTRAPPER = "just like a butterfly net, but for catching spooky ghosts!",
+
+        SHADOW_HEART_VEIN = "Ew! A bad-magic vein! It looks like it hurts!",
+
+        WX78_SHADOWDRONE_DEBUFFER = "Bad-magic robot that makes others feel sick!",
+        WX78_SHADOWDRONE_HARVESTER = "Bad-magic robot that collects toys!",-- The chair itself uses WOOD_CHAIR inspect states.
+    },
 
     DESCRIBE_GENERIC = "How do you play with this toy?",
     DESCRIBE_TOODARK = "It's too dark! I'm scared of the Big Dark!",

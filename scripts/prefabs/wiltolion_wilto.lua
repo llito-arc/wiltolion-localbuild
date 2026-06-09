@@ -35,23 +35,21 @@ local HEALING_VALUES = {
     bandage = 50, 
     
     -- Cheap "Trash" & Abundant Nature (1 to 3 points)
-    petals = 1,
-    petals_evil = 1,
-    foliage = 1,          -- Cave fern leaves
-    kelp = 1,             -- Raw bull kelp from the ocean
+    petals = 5,
+    foliage = 3,          -- Cave fern leaves
+    kelp = 3,             -- Raw bull kelp from the ocean
     kelp_cooked = 3,
     cutlichen = 3,        -- Cave lichen
     lightbulb = 1,
     forgetmelots = 1,     -- Common weeds
     tillweed = 1,
     succulent_picked = 3, -- Desert succulents
-    moon_tree_blossom = 2,
-    ice = 1,              -- Can be eaten to cool down / minor heal
-    seeds = 1,
-    roasted_seeds = 1,
+    moon_tree_blossom = 5,              -- Can be eaten to cool down / minor heal
+    seeds = 3,
+    roasted_seeds = 5,
     
     -- Basic Forage & Meats (Low value)
-    butterflywings = 5,
+    butterflywings = 10,
     honey = 5,
     bluecap = 10,         -- Excellent raw healing mushroom
     batwing = 3,
@@ -65,7 +63,8 @@ local HEALING_VALUES = {
     fishtacos = 20,
     trailmix = 30,
     honeyham = 30,
-    pierogi = 40
+    pierogi = 40,
+    jellybean = 120,
 }
 
 local POINTS_PER_TOKEN = 30

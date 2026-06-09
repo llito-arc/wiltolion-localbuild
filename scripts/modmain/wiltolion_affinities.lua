@@ -87,7 +87,6 @@ local function WiltolionSanityAffinities(inst)
 end
 
 -- 2. Staff Affinities (Injected into prefabs)
--- 2. Staff Affinities (Injected into prefabs)
 local function InjectStaffAffinities(inst)
     if not GLOBAL.TheWorld.ismastersim then return end
     
