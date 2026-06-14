@@ -250,8 +250,56 @@ local TRAVEL_PYLON = AddAction("TRAVEL_PYLON", "Travel", function(act)
     end
     return false
 end)
-TRAVEL_PYLON.distance = 2
+TRAVEL_PYLON.distance = 3
 TRAVEL_PYLON.priority = 10
+
+-- ==========================================
+-- PYLON CHOOSE DESTINATION (SERVER)
+-- ==========================================
+AddStategraphState("wilson", GLOBAL.State({
+    name = "wiltolion_pylon_interact",
+    tags = { "doing" }, 
+
+    onenter = function(inst)
+        inst.components.locomotor:Stop()
+        
+        -- Animaciones nativas y reales del armario extraídas del código base de Klei
+        inst.AnimState:PlayAnimation("idle_wardrobe1_pre")
+        inst.AnimState:PushAnimation("idle_wardrobe1_loop", true) 
+        
+        inst.sg.statemem.action = inst.bufferedaction
+        -- Ejecuta la acción que abre el mapa
+        inst:PerformBufferedAction() 
+    end,
+}))
+
+-- ==========================================
+-- PYLON CHOOSE DESTINATION (CLIENT)
+-- ==========================================
+AddStategraphState("wilson_client", GLOBAL.State({
+    name = "wiltolion_pylon_interact",
+    tags = { "doing" },
+    server_states = { "wiltolion_pylon_interact" }, 
+
+    onenter = function(inst)
+        inst.components.locomotor:Stop()
+        
+        -- Animaciones nativas y reales del armario para la predicción
+        inst.AnimState:PlayAnimation("idle_wardrobe1_pre")
+        inst.AnimState:PushAnimation("idle_wardrobe1_loop", true) 
+        
+        inst:PerformPreviewBufferedAction()
+    end,
+    
+    onupdate = function(inst)
+        if inst:HasTag("doing") then
+            -- Rompe el bucle si el jugador decide caminar
+            if inst.entity:FlattenMovementPrediction() then 
+                inst.sg:GoToState("idle", "noanim") 
+            end
+        end
+    end,
+}))
 
 -- ==========================================
 -- PYLON INTERFACE COMPONENT
@@ -412,9 +460,13 @@ AddStategraphState("wilson", GLOBAL.State({
 
     onenter = function(inst)
         inst.components.locomotor:Stop()
-        inst.AnimState:AddOverrideBuild("wilto_journal_fx")
+
+        -- El blindaje: Solo tocamos el símbolo de las manos de la animación peruse
+        inst.AnimState:OverrideSymbol("book_peruse", "wilto_journal_fx", "book_peruse")
+        inst.AnimState:OverrideSymbol("book_peruse_pages", "wilto_journal_fx", "book_peruse_pages") -- Añade esta línea
         inst.AnimState:PlayAnimation("action_uniqueitem_pre")
         inst.AnimState:PushAnimation("peruse", false)
+        
         inst.sg.statemem.action = inst.bufferedaction
         inst:PerformBufferedAction()
     end,
@@ -428,7 +480,9 @@ AddStategraphState("wilson", GLOBAL.State({
         end),
     },
     onexit = function(inst) 
-        inst.AnimState:ClearOverrideBuild("wilto_journal_fx") 
+        -- Limpiamos el símbolo de forma segura al terminar
+        inst.AnimState:ClearOverrideSymbol("book_peruse")
+        inst.AnimState:ClearOverrideSymbol("book_peruse_pages") -- Limpia esta también
     end,
 }))
 
@@ -441,9 +495,11 @@ AddStategraphState("wilson_client", GLOBAL.State({
 
     onenter = function(inst)
         inst.components.locomotor:Stop()
-        inst.AnimState:AddOverrideBuild("wilto_journal_fx")
+        
+        -- Usamos las animaciones de latencia nativas para el cliente
         inst.AnimState:PlayAnimation("action_uniqueitem_pre")
-        inst.AnimState:PushAnimation("peruse", false)
+        inst.AnimState:PushAnimation("action_uniqueitem_lag", false)
+        
         inst:PerformPreviewBufferedAction()
         inst.sg:SetTimeout(4) 
         inst.sg.statemem.action = inst.bufferedaction
@@ -635,8 +691,8 @@ AddStategraphPostInit("wilson_client", function(sg)
 end)
 
 -- ACTION HANDLERS
-AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.TRAVEL_PYLON, "doshortaction"))
-AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.TRAVEL_PYLON, "doshortaction"))
+AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.TRAVEL_PYLON, "wiltolion_pylon_interact"))
+AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.TRAVEL_PYLON, "wiltolion_pylon_interact"))
 AddStategraphActionHandler("wilson", GLOBAL.ActionHandler(GLOBAL.ACTIONS.RECHARGE_SOLAR, "doshortaction"))
 AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.RECHARGE_SOLAR, "doshortaction"))
 

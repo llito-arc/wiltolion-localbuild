@@ -1101,7 +1101,7 @@ return {
 
     ANNOUNCE_PIRATES_ARRIVE = "Uh oh... that noisy song means the meanie water-bullies are here!",
 
-    ANNOUNCE_BOOK_MOON_DAYTIME = "only_used_by_waxwell_and_wicker",
+    ANNOUNCE_BOOK_MOON_DAYTIME = "Nope! The sky-friend is here. This star-book won't work!",
 
     ANNOUNCE_OFF_SCRIPT = "That wasn't part of our playtime rules!",
 
@@ -5777,7 +5777,7 @@ return {
         GESTALT_CAGE =
         {
             GENERIC = "An empty star-trap.",
-            FILLED = "There's a night-spark trapped inside!",
+            FILLED = "There's a night-sparky friend trapped inside!",
         },
         WAGBOSS_ROBOT_SECRET = "Ooh, a secret beep-boop toy!",
         WAGBOSS_ROBOT = "A giant metal friend!",

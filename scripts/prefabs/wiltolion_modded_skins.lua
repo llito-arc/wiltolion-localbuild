@@ -26,7 +26,13 @@ table.insert(prefabs, CreatePrefabSkin("wiltolion_example_skin", {
     build_name_override = "wiltolion_example_skin",
 
     type = "base",
+    
+    -- Triggers the golden frame and golden name logic in the UI.
     rarity = "ModMade",
+
+    -- CRITICAL FIX: Prevents the API from querying Steam for item metadata.
+    -- This ensures the golden title renders using local assets.
+    check_item_info = false,
 
     skin_tags = { "WILTOLION", "EXAMPLE_TAG" },
 }))

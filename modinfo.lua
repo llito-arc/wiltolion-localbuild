@@ -15,7 +15,7 @@ description = [[
 ]]
 
 author = "llito"
-version = "2.0.1" 
+version = "2.0.3" 
 
 -- This is the URL name of the mod's thread on the forum; the part after the ? and before the first & in the url
 forumthread = ""
