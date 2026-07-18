@@ -55,6 +55,7 @@ local function fn()
 
     inst:AddTag("wiltolion_sundrop")
     inst:AddTag("nosteal") -- Prevents monkeys or Krampus from stealing it and causing crashes
+    inst:AddTag("irreplaceable") -- Nace siendo ignorado por la IA
 
     -- CLIENT LOGIC: We only control the light and visibility in inventory
     inst:DoPeriodicTask(0.1, function(inst)
@@ -167,7 +168,11 @@ local function fn()
     end
 
     StartDespawnTimer(inst)
-    inst:ListenForEvent("ondropped", StartDespawnTimer)
+    inst:ListenForEvent("ondropped", function(i)
+        StartDespawnTimer(i)
+        -- Si toca el suelo, la IA vuelve a ignorarlo
+        i:AddTag("irreplaceable")
+    end)
 
     -- ==========================================
     -- PHRASES WHEN BURNING / DROPPING THE SUNDROP
@@ -200,6 +205,7 @@ local function fn()
     -- ==========================================
     inst:ListenForEvent("onputininventory", function(inst, owner)
         StopDespawnTimer(inst)
+        inst:RemoveTag("irreplaceable")
 
         if owner ~= nil then
             -- 1. If it went into the PYLON

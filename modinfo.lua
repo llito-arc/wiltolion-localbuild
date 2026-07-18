@@ -15,7 +15,7 @@ description = [[
 ]]
 
 author = "llito"
-version = "2.0.3" 
+version = "2.0.10" 
 
 -- This is the URL name of the mod's thread on the forum; the part after the ? and before the first & in the url
 forumthread = ""
@@ -35,7 +35,7 @@ shipwrecked_compatible = false
 all_clients_require_mod = true 
 client_only_mod = false  -- Must be false because it's a character
 
--- Add this to ensure it loads with priority
+-- Ensure it loads with priority
 priority = -1
 
 icon_atlas = "modicon.xml"

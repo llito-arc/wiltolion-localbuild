@@ -203,6 +203,7 @@ local function fn()
     inst:AddTag("scarytoprey")
     inst:AddTag("smallcreature")
     inst:AddTag("noaurahit")
+    inst:AddTag("soulless")
 
     inst.AnimState:SetBank("spider")
     inst.AnimState:SetBuild("wiltolion_thingy")

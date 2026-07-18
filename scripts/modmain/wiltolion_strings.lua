@@ -300,7 +300,9 @@ GLOBAL.STRINGS.UI.HUD.PYLON_TOOCLOSE = "It's too close to another Pylon!"
 STRINGS.NAMES.WILTOLION_FLOWER = "Solar Flower"
 STRINGS.CHARACTERS.WILTOLION.DESCRIBE.WILTOLION_FLOWER = "A little piece of my own sunshine!"
 
-STRINGS.SKIN_NAMES["wiltolion_none"] = "Wiltolion"
+STRINGS.NAMES.WILTOLION = "Wiltolion"
+STRINGS.CHARACTER_NAMES.wiltolion = "Wiltolion"
+STRINGS.CHARACTER_TITLES.wiltolion = "The Sun Lion"
 
--- 2. Base skin description (Prevents blank text or crashes on hover)
+STRINGS.SKIN_NAMES["wiltolion_none"] = "Wiltolion"
 STRINGS.SKIN_DESCRIPTIONS["wiltolion_none"] = "The original form."

@@ -211,10 +211,22 @@ end)
 -- CELESTIAL PYLON NETWORK (FAST TRAVEL)
 -- ==========================================
 
+-- ==========================================
+-- CHECK GLOBAL NETWORK STATE
+-- ==========================================
 local function IsPylonNetworkActive()
-    for _, player in ipairs(GLOBAL.AllPlayers) do
-        if player:HasTag("wiltolion_constel_3") then
-            return true
+    if not GLOBAL.TheWorld.wiltolion_pylons then return false end
+    
+    for pylon, _ in pairs(GLOBAL.TheWorld.wiltolion_pylons) do
+        -- if the pylon is valid, check for nearby players with the required skill tag
+        if pylon:IsValid() and pylon.Transform ~= nil then
+            local x, y, z = pylon.Transform:GetWorldPosition()
+            local players = GLOBAL.FindPlayersInRange(x, y, z, 15, true)
+            for _, player in ipairs(players) do
+                if player:HasTag("wiltolion_constel_3") then
+                    return true -- Net active
+                end
+            end
         end
     end
     return false
@@ -224,10 +236,17 @@ local TRAVEL_PYLON = AddAction("TRAVEL_PYLON", "Travel", function(act)
     local pylon = act.target
     local traveler = act.doer
     
+    -- 1. CLIENTE: Siempre devuelve true para que el botón de Viajar aparezca en pantalla.
+    if not GLOBAL.TheWorld.ismastersim then
+        return true
+    end
+
+    -- 2. SERVIDOR: Es el único que hace el cálculo real cuando haces clic.
     if not IsPylonNetworkActive() then
         return false, "NOT_LEARNED" 
     end
 
+    -- 3. VIAJE Y ENERGÍA
     if pylon and traveler and pylon.components.container then
         if pylon.components.container:Has("wiltolion_sundrop", 5) then
             local pylon_data = {}
@@ -306,7 +325,9 @@ AddStategraphState("wilson_client", GLOBAL.State({
 -- ==========================================
 AddComponentAction("SCENE", "container", function(inst, doer, actions, right)
     if right and inst.prefab == "wiltolion_pylon" then
-        if IsPylonNetworkActive() then
+        -- El cliente no tiene la tabla del servidor, así que le forzamos a mostrar la acción.
+        -- Cuando hagas clic, el servidor evaluará IsPylonNetworkActive() y decidirá.
+        if not GLOBAL.TheWorld.ismastersim or IsPylonNetworkActive() then
             table.insert(actions, GLOBAL.ACTIONS.TRAVEL_PYLON)
         end
     end
@@ -520,7 +541,82 @@ AddStategraphState("wilson_client", GLOBAL.State({
     end,
 }))
 
+-- ==========================================
+-- PROCEDURAL OBSERVER ANIMATION (NETWORK SAFE)
+-- ==========================================
+AddPlayerPostInit(function(inst)
+    -- We replace the ephemeral net_events with a persistent state variable.
+    -- This guarantees that if a player teleports out of network range, 
+    -- observers will correctly reset their scale to 1,1,1 when they meet again.
+    inst._wiltolion_warp_state = GLOBAL.net_tinybyte(inst.GUID, "wiltolion.warp_state", "wiltolion_warp_dirty")
+
+    if not GLOBAL.TheNet:IsDedicated() then
+        inst:ListenForEvent("wiltolion_warp_dirty", function(player)
+            if not player or not player:IsValid() then return end
+            
+            -- The caster ignores this to avoid double-math and keep 0 ping.
+            if player == GLOBAL.ThePlayer and player.sg and player.sg:HasStateTag("busy") and player.sg.currentstate.name == "wiltolion_pylon_travel" then 
+                return 
+            end
+            
+            local state = player._wiltolion_warp_state:value()
+            
+            if player._stretch_task then 
+                player._stretch_task:Cancel() 
+                player._stretch_task = nil 
+            end
+            
+            if state == 1 then
+                -- STATE 1: DEPARTURE MATH
+                local time_elapsed = 0
+                local DURATION = 5 * GLOBAL.FRAMES 
+                player._stretch_task = player:DoPeriodicTask(0, function()
+                    time_elapsed = time_elapsed + GLOBAL.FRAMES
+                    local percent = math.min(1, time_elapsed / DURATION)
+                    local ease = percent * percent * percent * percent
+                    local stretch = 1 + (12 * ease) 
+                    local width = math.max(0.01, 1 - (0.99 * ease))
+                    player.Transform:SetScale(width, stretch, width)
+                end)
+                
+            elseif state == 2 then
+                -- STATE 2: ARRIVAL MATH
+                player:Show()
+                player.Transform:SetScale(0.01, 13, 0.01)
+                
+                local time_elapsed = 0
+                local DURATION = 5 * GLOBAL.FRAMES 
+                player._stretch_task = player:DoPeriodicTask(0, function()
+                    time_elapsed = time_elapsed + GLOBAL.FRAMES
+                    local percent = math.max(0, 1 - (time_elapsed / DURATION))
+                    local ease = percent * percent * percent * percent
+                    local stretch = 1 + (12 * ease) 
+                    local width = math.max(0.01, 1 - (0.99 * ease))
+                    
+                    player.Transform:SetScale(width, stretch, width)
+                    
+                    if time_elapsed >= DURATION then
+                        player.Transform:SetScale(1, 1, 1)
+                        if player._stretch_task then 
+                            player._stretch_task:Cancel() 
+                            player._stretch_task = nil 
+                        end
+                    end
+                end)
+                
+            else
+                -- STATE 0: FAILSAFE CLEANUP
+                -- This specifically cures the permanent invisibility bug!
+                player.Transform:SetScale(1, 1, 1)
+                player:Show()
+            end
+        end)
+    end
+end)
+
+-- ==========================================
 -- PYLON TRAVEL (SERVER)
+-- ==========================================
 AddStategraphState("wilson", GLOBAL.State({
     name = "wiltolion_pylon_travel",
     tags = { "busy", "pausepredict", "nomorph", "nodangle", "noattack" },
@@ -529,29 +625,21 @@ AddStategraphState("wilson", GLOBAL.State({
         inst.components.locomotor:Stop()
         inst.sg.statemem.dest = dest_coords
         inst.AnimState:SetAddColour(1, 1, 1, 1)
-        inst.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
         
         inst.SoundEmitter:PlaySound("dontstarve/common/staff_star_create")
         inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
 
-        inst.sg.statemem.time_elapsed = 0
-        local DURATION = 5 * GLOBAL.FRAMES 
+        inst:PushEvent("wiltolion_visuals_dirty")
         
-        inst.sg.statemem.task = inst:DoPeriodicTask(0, function()
-            inst.sg.statemem.time_elapsed = inst.sg.statemem.time_elapsed + GLOBAL.FRAMES
-            local percent = math.min(1, inst.sg.statemem.time_elapsed / DURATION)
-            local ease = percent * percent * percent * percent
-            local stretch = 1 + (12 * ease) 
-            local width = math.max(0.01, 1 - (0.99 * ease))
-            inst.Transform:SetScale(width, stretch, width)
-        end)
+        -- Start Departure Animation for observers
+        inst._wiltolion_warp_state:set(1)
     end,
 
     timeline = {
         GLOBAL.TimeEvent(5 * GLOBAL.FRAMES, function(inst)
-            if inst.sg.statemem.task then inst.sg.statemem.task:Cancel() inst.sg.statemem.task = nil end
             inst:Hide()
-            
+        end),
+        GLOBAL.TimeEvent(11 * GLOBAL.FRAMES, function(inst)
             local dest = inst.sg.statemem.dest
             if dest then
                 local pt = GLOBAL.Vector3(dest.x, 0, dest.z)
@@ -565,9 +653,12 @@ AddStategraphState("wilson", GLOBAL.State({
             end
         end),
         GLOBAL.TimeEvent(12 * GLOBAL.FRAMES, function(inst)
-            inst:Show()
-            inst.Transform:SetScale(1, 1, 1)
-            inst.AnimState:ClearBloomEffectHandle()
+            -- We must Show() on the server so the network syncs the entity again
+            inst:Show() 
+            inst.Transform:SetScale(0.01, 13, 0.01)
+            
+            -- Start Arrival Animation for observers
+            inst._wiltolion_warp_state:set(2)
             
             if inst.sg.statemem.arrival_pos then
                 local pos = inst.sg.statemem.arrival_pos
@@ -589,16 +680,22 @@ AddStategraphState("wilson", GLOBAL.State({
         end),
     },
     onexit = function(inst)
-        if inst.sg.statemem.task then inst.sg.statemem.task:Cancel() end
         if inst.sg.statemem.fade_task then inst.sg.statemem.fade_task:Cancel() end
+        
+        -- VITAL: Force state 0. If observers come into range, they will read 0
+        -- and automatically reset the scale to 1,1,1.
+        inst._wiltolion_warp_state:set(0) 
+        
         inst.AnimState:SetAddColour(0, 0, 0, 0)
-        inst.AnimState:ClearBloomEffectHandle()
         inst.Transform:SetScale(1, 1, 1)
         inst:Show()
+        inst:PushEvent("wiltolion_visuals_dirty")
     end,
 }))
 
+-- ==========================================
 -- PYLON TRAVEL (CLIENT)
+-- ==========================================
 AddStategraphState("wilson_client", GLOBAL.State({
     name = "wiltolion_pylon_travel",
     tags = { "busy", "pausepredict", "nomorph", "nodangle", "noattack" },
@@ -606,16 +703,13 @@ AddStategraphState("wilson_client", GLOBAL.State({
 
     onenter = function(inst)
         inst.components.locomotor:Stop()
-        
         inst.SoundEmitter:PlaySound("dontstarve/common/staff_star_create")
         inst.SoundEmitter:PlaySound("dontstarve/common/telebase_gemplace")
-
         inst.AnimState:SetAddColour(1, 1, 1, 1)
-        inst.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
 
+        -- LOCAL DEPARTURE MATH (So the doer feels 0 ping input)
         inst.sg.statemem.time_elapsed = 0
         local DURATION = 5 * GLOBAL.FRAMES 
-        
         inst.sg.statemem.task = inst:DoPeriodicTask(0, function()
             inst.sg.statemem.time_elapsed = inst.sg.statemem.time_elapsed + GLOBAL.FRAMES
             local percent = math.min(1, inst.sg.statemem.time_elapsed / DURATION)
@@ -625,7 +719,7 @@ AddStategraphState("wilson_client", GLOBAL.State({
             inst.Transform:SetScale(width, stretch, width)
         end)
         
-        inst.sg:SetTimeout(2)
+        inst.sg:SetTimeout(3)
     end,
 
     timeline = {
@@ -633,20 +727,9 @@ AddStategraphState("wilson_client", GLOBAL.State({
             if inst.sg.statemem.task then inst.sg.statemem.task:Cancel() inst.sg.statemem.task = nil end
             inst:Hide()
         end),
-        GLOBAL.TimeEvent(12 * GLOBAL.FRAMES, function(inst)
-            inst:Show()
-            inst.Transform:SetScale(1, 1, 1)
-            inst.AnimState:ClearBloomEffectHandle()
-            
-            inst.sg.statemem.white_val = 1.0
-            inst.sg.statemem.fade_task = inst:DoPeriodicTask(0, function()
-                inst.sg.statemem.white_val = math.max(0, inst.sg.statemem.white_val - 0.4) 
-                inst.AnimState:SetAddColour(inst.sg.statemem.white_val, inst.sg.statemem.white_val, inst.sg.statemem.white_val, 1)
-                if inst.sg.statemem.white_val <= 0 then
-                    if inst.sg.statemem.fade_task then inst.sg.statemem.fade_task:Cancel() end
-                end
-            end)
-        end),
+        -- WARNING: NO ARRIVAL TIMELINE EVENT HERE!
+        -- The arrival is now 100% controlled by the server's net_event to ensure
+        -- the camera snap and the coordinates match exactly with the animation.
     },
     
     ontimeout = function(inst)
@@ -655,11 +738,7 @@ AddStategraphState("wilson_client", GLOBAL.State({
 
     onexit = function(inst)
         if inst.sg.statemem.task then inst.sg.statemem.task:Cancel() end
-        if inst.sg.statemem.fade_task then inst.sg.statemem.fade_task:Cancel() end
-        inst.AnimState:SetAddColour(0, 0, 0, 0)
-        inst.AnimState:ClearBloomEffectHandle()
-        inst.Transform:SetScale(1, 1, 1)
-        inst:Show()
+        -- Do not forcefully SetScale or Show() here on client exit, let the net_event finish it safely.
     end,
 }))
 
@@ -768,7 +847,7 @@ local ALTER_CALL = AddAction("ALTER_CALL", "Call for help", function(act)
     return true
 end)
 ALTER_CALL.distance = 15 
-ALTER_CALL.priority = 10
+ALTER_CALL.priority = -1
 
 AddComponentAction("SCENE", "combat", function(inst, doer, actions, right)
     if right and doer:HasTag("wiltolion_lunar_1") then
@@ -776,23 +855,23 @@ AddComponentAction("SCENE", "combat", function(inst, doer, actions, right)
         local is_staff = weapon ~= nil and weapon:HasTag("castspell")
         
         -- =====================================================
-        -- FRIENDLY FIRE SAFEGUARD
+        -- FRIENDLY FIRE & INTERACTION SAFEGUARD
         -- =====================================================
-        -- 1. Base exclusions: Pets, walls, and players (if PVP is off)
+        -- 2. FIX: Added "structure" tag to completely prevent 
+        -- targeting chests, walls, crockpots, or base items.
         local is_ally = inst:HasTag("companion") or 
                         inst:HasTag("wall") or 
+                        inst:HasTag("structure") or 
                         (inst:HasTag("player") and not GLOBAL.TheNet:GetPVPEnabled())
         
-        -- 2. Hired followers exclusion: Protects pigs, bunnymen, or other followers
         if not is_ally and inst.replica.follower ~= nil then
             local leader = inst.replica.follower:GetLeader()
-            -- If the target is currently following a player, treat it as an ally
             if leader ~= nil and leader:HasTag("player") then
                 is_ally = true
             end
         end
         
-        -- Only allow the action if it's NOT a staff, NOT an ally, and CAN be targeted
+        -- Since priority is -1, it seamlessly integrates without overriding.
         if not is_staff and not is_ally and doer.replica.combat:CanTarget(inst) then
             table.insert(actions, GLOBAL.ACTIONS.ALTER_CALL)
         end

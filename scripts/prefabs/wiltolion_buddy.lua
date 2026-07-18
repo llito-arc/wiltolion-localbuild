@@ -171,13 +171,14 @@ local function fn()
     -- 1. FLIGHT PHYSICS (Ignores water and edges)
     MakeFlyingCharacterPhysics(inst, 1, 0.5)
 
-    -- 2. TAGS DE VUELO
+    -- 2. Fly tags 
     inst:AddTag("flying")
     inst:AddTag("ignorewalkableplatformdrowning")
     inst:AddTag("insect")
     inst:AddTag("companion")
     inst:AddTag("NOBLOCK")
     inst:AddTag("wiltolion_buddy")
+    inst:AddTag("soulless")
 
     inst.AnimState:SetBank("wiltolion_buddy")
     inst.AnimState:SetBuild("wiltolion_buddy")

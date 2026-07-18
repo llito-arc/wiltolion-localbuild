@@ -192,9 +192,10 @@ local function UpdateShadowAffinity(inst)
 
     -- =======================================================
     -- MECHANIC 1: SLIGHT AGGRO INCREASE
-    -- 30% chance every 5 seconds to steal aggro from ONE nearby shadow
+    -- Only active if sanity is below 65%.
+    -- 30% chance every 5 seconds to steal aggro from ONE nearby shadow.
     -- =======================================================
-    if math.random() < 0.30 then
+    if sanity_pct < 0.65 and math.random() < 0.30 then
         local nearby_shadows = TheSim:FindEntities(x, y, z, 15, {"shadowcreature"}, {"INLIMBO"})
         for _, shadow in ipairs(nearby_shadows) do
             -- If it's a valid shadow and it's NOT already targeting Wiltolion

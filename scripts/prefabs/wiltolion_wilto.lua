@@ -603,6 +603,7 @@ local function wiltofn()
     inst:AddTag("trader") 
     inst:AddTag("alltrader") 
     inst:AddTag("wilto_companion") 
+    inst:AddTag("soulless")
     inst:AddTag("companion") 
     inst:AddTag("NOBLOCK") 
     

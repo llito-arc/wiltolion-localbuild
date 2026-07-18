@@ -23,11 +23,14 @@ end)
 AddPlayerPostInit(function(inst)
     inst._wiltolion_bloom_state = GLOBAL.net_tinybyte(inst.GUID, "wiltolion.bloom_state", "wiltolion_bloom_dirty")
 
-    inst:ListenForEvent("wiltolion_bloom_dirty", function(player)
+    -- LOCAL APPLY FUNCTION: This safely sets the bloom based on the network value
+    local function ApplyBloomState(player)
+        if not player or not player:IsValid() then return end
         local state = player._wiltolion_bloom_state:value()
         
         if state == 2 then
             player.AnimState:ClearSymbolBloom("swap_hat")
+            player.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
         elseif state == 1 then
             player.AnimState:SetBloomEffectHandle("shaders/anim.ksh")
             player.AnimState:SetSymbolBloom("swap_hat")
@@ -37,52 +40,54 @@ AddPlayerPostInit(function(inst)
                 player.AnimState:ClearBloomEffectHandle()
             end
         end
-    end)
+    end
 
+    -- CLIENT SIDE: Listens to the network AND overrides its own predictions
+    if not GLOBAL.TheNet:IsDedicated() then
+        inst:ListenForEvent("wiltolion_bloom_dirty", function(player) player:DoTaskInTime(0, ApplyBloomState) end)
+        -- These two lines are the magic fix: The client corrects itself immediately when moving items
+        inst:ListenForEvent("equip", function(player) player:DoTaskInTime(0, ApplyBloomState) end)
+        inst:ListenForEvent("unequip", function(player) player:DoTaskInTime(0, ApplyBloomState) end)
+    end
+
+    -- SERVER SIDE: Evaluates actual inventory and updates the network
     if GLOBAL.TheWorld.ismastersim then
-        inst._torus_active = false
-        inst._has_body_bloom = false
-
         local function EvaluateVisuals(player)
-            local state = 0
-            if player._has_body_bloom then
-                state = 2 
-            elseif player._torus_active then
-                state = 1 
+            if not player:IsValid() then return end
+            
+            local torus_active = false
+            local body_bloom = false
+            
+            if player.components.inventory then
+                local head_item = player.components.inventory:GetEquippedItem(GLOBAL.EQUIPSLOTS.HEAD)
+                if head_item and head_item.prefab == "wiltolion_torus" then
+                    torus_active = not head_item._on_cooldown
+                end
+                
+                local body_item = player.components.inventory:GetEquippedItem(GLOBAL.EQUIPSLOTS.BODY)
+                if body_item and body_item.prefab == "yellowamulet" then
+                    body_bloom = true
+                end
             end
-            player._wiltolion_bloom_state:set(state)
+            
+            if player.sg and player.sg:HasStateTag("busy") and player.sg.currentstate.name == "wiltolion_pylon_travel" then
+                body_bloom = true
+            end
+            
+            local final_state = 0
+            if body_bloom then final_state = 2 elseif torus_active then final_state = 1 end
+            
+            player._wiltolion_bloom_state:set(final_state)
+            
+            if not GLOBAL.TheNet:IsDedicated() then
+                player:PushEvent("wiltolion_bloom_dirty")
+            end
         end
 
-        inst:ListenForEvent("equip", function(player, data)
-            local item = data and data.item
-            if item then
-                if item.prefab == "yellowamulet" then
-                    player._has_body_bloom = true
-                elseif item.prefab == "wiltolion_torus" then
-                    player._torus_active = not item._on_cooldown
-                end
-            end
-            EvaluateVisuals(player)
-        end)
-
-        inst:ListenForEvent("unequip", function(player, data)
-            local item = data and data.item
-            if item then
-                if item.prefab == "yellowamulet" then
-                    player._has_body_bloom = false
-                elseif item.prefab == "wiltolion_torus" then
-                    player._torus_active = false
-                end
-            end
-            EvaluateVisuals(player)
-        end)
-        
-        inst:ListenForEvent("wiltolion_torus_statechange", function(player, data)
-            if data then
-                player._torus_active = data.is_glowing
-                EvaluateVisuals(player)
-            end
-        end)
+        inst:ListenForEvent("equip", function(player) player:DoTaskInTime(0, EvaluateVisuals) end)
+        inst:ListenForEvent("unequip", function(player) player:DoTaskInTime(0, EvaluateVisuals) end)
+        inst:ListenForEvent("wiltolion_torus_statechange", function(player) player:DoTaskInTime(0, EvaluateVisuals) end)
+        inst:ListenForEvent("wiltolion_visuals_dirty", function(player) player:DoTaskInTime(0, EvaluateVisuals) end)
     end
 end)
 

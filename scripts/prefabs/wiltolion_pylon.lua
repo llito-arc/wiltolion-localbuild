@@ -468,12 +468,13 @@ local function fn()
 
     MakeHauntableWork(inst)
 
+    inst:DoTaskInTime(0, function() 
+        RegisterPylon(inst) 
+    end)
+
     inst.OnLoad = function(inst, data)
         inst:DoTaskInTime(0, function()
             UpdateAuras(inst)
-            RegisterPylon(inst)
-            
-            -- Enforce the correct visual state after world fully loads
             PlayCorrectIdle(inst)
         end)
     end
